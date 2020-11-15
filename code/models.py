@@ -73,6 +73,13 @@ def delete_transformers():
 	del TOKENIZER_PRE
 	del TRANS_MODEL
 
+def max_pool_op(X):
+	seq_len = X.shape[1]
+	x_hat = X.permute((0,2,1))
+	x_hat = F.max_pool1d(x_hat,seq_len, stride=1)
+	x_hat = x_hat.permute((0,2,1))
+	return x_hat.squeeze()
+
 def make_BertRep_from_data(data_path:str, drops:list = ['humor_controversy', 'offense_rating'], 
 						   text_field='text', max_length=30, my_batch=32, header_out=('y_c', 'y_v', 'x'),
 						   final_drop:list = ['text', 'id']):
@@ -97,7 +104,9 @@ def make_BertRep_from_data(data_path:str, drops:list = ['humor_controversy', 'of
 
 			ids  = TOKENIZER_PRE(text, return_tensors='pt', truncation=True, padding=True, max_length=max_length)
 			out  = TRANS_MODEL(**ids) #, output_hidden_states=True)
-			vects = F.normalize(out[0].sum(dim=1), dim=-1).numpy()
+			# vects = out[0][:,-1].numpy() # last
+			# vects = max_pool_op(out[0]).numpy() # Maxpool
+			vects = F.normalize(out[0].sum(dim=1), dim=-1).numpy() # Add and Norm
 			#vects = F.normalize(out.hidden_states[2].sum(dim=1), dim=-1).reshape(-1).numpy()
 
 			for i in range(vects.shape[0]):
@@ -287,4 +296,4 @@ def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rati
 	del val
 	data.to_csv(pred_path, index=None, header=header)
 	del data
-	print ('# Predictions saved in', colorizar(os.path.basename(pred_path)))
+	print ('# Predictions saved in', colorizar(pred_path))

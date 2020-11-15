@@ -1,9 +1,11 @@
 import os
+import torch
 from code.models import makeTrain_and_ValData, make_BertRep_from_data
 from code.models import offline, load_transformers, delete_transformers
 from code.models import makeModels, trainModels, makeDataSet_Vecs
 from code.models import evaluateModels, makePredictData
 from code.utils  import projectData2D
+from code.siam   import findCenter_and_Limits
 
 
 DATA_PATH       = 'data/train.csv'
@@ -18,7 +20,8 @@ ENCODER_BATCH   = 64
 ENCODER_SIZE    = 800
 ENCODER_DROPOUT = 0.2
 ENCODER_LR      = 0.05
-ENCODER_EPOCH   = 10
+ENCODER_EPOCH   = 20
+K,M             = 1, 3
 
 def prepare_environment():
     if not os.path.isdir('data'):
@@ -28,8 +31,10 @@ def prepare_environment():
     if not os.path.isdir('pics'):
         os.mkdir('pics')
     
+    torch.manual_seed(1234567)
+	# np.random.seed(1234567)
+    
     offline(True) # cambiar esto
-    #load_transformers()
 
 def clear_environment():
     delete_transformers()
@@ -48,6 +53,9 @@ def Predict():
     model.load(os.path.join('pts', 'encoder.pt'))
     evaluateModels(model, loader)
 
+def prep_Siam():
+    findCenter_and_Limits(DATA_PATH, K,M)
+
 if __name__ == '__main__':
     prepare_environment()
 
@@ -55,17 +63,21 @@ if __name__ == '__main__':
     DATA_PATH, EVAL_DATA_PATH = makeTrain_and_ValData(DATA_PATH, percent=10)
     
     # Making RoBERTa representations from data
+    #load_transformers()
     DATA_PATH      = make_BertRep_from_data(DATA_PATH, max_length=SEQUENCE_LENGTH, my_batch=BERT_BATCH)
     EVAL_DATA_PATH = make_BertRep_from_data(EVAL_DATA_PATH, max_length=SEQUENCE_LENGTH, my_batch=BERT_BATCH)
     TEST_DATA_PATH = make_BertRep_from_data(TEST_DATA_PATH, max_length=SEQUENCE_LENGTH, my_batch=BERT_BATCH,
                                             drops=[], final_drop=['text'], header_out=('id', 'x'))
-    # Analisis
-    #projectData2D(DATA_PATH, save_name='2Data')
+    #delete_transformers()
 
-    # Training the encoder
-    #TrainEncoder()
+    # Analisis
+    # projectData2D(DATA_PATH, save_name='2Data')
+
+    # Training the encoder and making reference vectors
+    # TrainEncoder()
+    prep_Siam()
 
     # Make predictions
-    Predict()
+    # Predict()
 
     #clear_environment()
