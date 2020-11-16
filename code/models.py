@@ -130,9 +130,27 @@ class VecsDataset(Dataset):
 	def __len__(self):
 		return len(self.data_frame)
 
-	def trans(self, text):
-		text = [ int(i) for i in text.split() ]
-		return torch.Tensor(text).long()
+	def transF(self, text):
+		text = [ float(i) for i in text.split() ]
+		return torch.Tensor(text).float()
+
+	def __getitem__(self, idx):
+		if torch.is_tensor(idx):
+			idx = idx.tolist()
+		
+		sent  = self.transF(self.data_frame.loc[idx, 'x'])
+		value = self.data_frame.loc[idx, 'y_c']
+		regv  = self.data_frame.loc[idx, 'y_v']
+
+		sample = {'x': sent, 'y': value, 'v':regv}
+		return sample
+
+class SiamDataset(Dataset):
+	def __init__(self, csv_file):
+		self.data_frame = pd.read_csv(csv_file)
+
+	def __len__(self):
+		return len(self.data_frame)
 
 	def transF(self, text):
 		text = [ float(i) for i in text.split() ]
@@ -142,15 +160,22 @@ class VecsDataset(Dataset):
 		if torch.is_tensor(idx):
 			idx = idx.tolist()
 			
-		sent  = self.transF(self.data_frame.loc[idx, 'x'])
+		sent1  = self.transF(self.data_frame.loc[idx, 'x'])
+		sent2  = self.transF(self.data_frame.loc[idx, 'xr'])
 		value = self.data_frame.loc[idx, 'y_c']
-		regv  = self.data_frame.loc[idx, 'y_v']
 
-		sample = {'x': sent, 'y': value, 'v':regv}
+		sample = {'x1': sent1, 'x2': sent2, 'y': value}
 		return sample
 
 def makeDataSet_Vecs(csv_path:str, batch, shuffle=True):
 	data   =  VecsDataset(csv_path)
+	loader =  DataLoader(data, batch_size=batch,
+							shuffle=shuffle, num_workers=4,
+							drop_last=False)
+	return data, loader
+
+def makeDataSet_Siam(csv_path:str, batch, shuffle=True):
+	data   =  SiamDataset(csv_path)
 	loader =  DataLoader(data, batch_size=batch,
 							shuffle=shuffle, num_workers=4,
 							drop_last=False)
@@ -213,10 +238,51 @@ class Encod_Model(nn.Module):
 
 	def save(self, path):
 		torch.save(self.state_dict(), path) 
+
+class ContrastiveLoss(torch.nn.Module):
+    """
+    Contrastive loss function.
+    Based on: http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
+    """
+    def __init__(self, margin=2.0):
+        super(ContrastiveLoss, self).__init__()
+        self.margin = margin
+
+	# ver lo del contrastive con lo del label
+    def forward(self, D, label):
+        loss_contrastive = torch.mean((1-label) * torch.pow(D, 2) +
+                                      (label) * torch.pow(torch.clamp(self.margin - D, min=0.0), 2))
+        return loss_contrastive
+
+class Siam_Model(nn.Module):
+	def __init__(self, hidden_size, vec_size, dropout=0.2):
+		super(Siam_Model, self).__init__()
+		# self.criterion = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
+		self.criterion = ContrastiveLoss(2.0)
+
+		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
+		                              nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
+									  nn.Linear(hidden_size//2, hidden_size//4))
+		# self.Task1   = nn.Linear(hidden_size//4, 2)
+	def forward(self, X1, X2):
+		y1 = self.Dense1(X1)
+		y2 = self.Dense1(X2)
+
+		# distance function
+		euclidean_distance = F.pairwise_distance(y1, y2)
+		return euclidean_distance
+
+	def load(self, path):
+		self.load_state_dict(torch.load(path))
+
+	def save(self, path):
+		torch.save(self.state_dict(), path) 
 	
 def makeModels(name:str, size, in_size=768, dpr=0.2):
 	if name == 'encoder':
 		return Encod_Model(size, in_size, dropout=dpr)
+	elif name == 'siam':
+		return Siam_Model(size, in_size, dropout=dpr)
 	else:
 		print ('ERROR::NAME', name, 'not founded!!')
 
@@ -267,10 +333,57 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1):
 			model.save(os.path.join('pts', 'encoder.pt'))
 	board.show(os.path.join('pics', 'encoder.png'))
 
+def trainSiamModel(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1):
+	optim = torch.optim.Adam(model.parameters(), lr=lr)
+	model.train()
+
+	board = TorchBoard()
+	board.setFunct(min)
+	
+	for e in range(epochs):
+		bar = MyBar('Epoch '+str(e+1)+' '*(int(math.log10(epochs)+1) - int(math.log10(e+1)+1)) , 
+					max=len(Data_loader)+(len(evalData_loader if evalData_loader is not None else 0)))
+		total_loss, dl = 0., 0.
+		for data in Data_loader:
+			optim.zero_grad()
+			
+			y_hat = model(data['x1'], data['x2'])
+			y1    = data['y']
+
+			loss = model.criterion(y_hat, y1)
+			loss.backward()
+			optim.step()
+
+			with torch.no_grad():
+				total_loss += loss.item()
+				dl += y1.shape[0]
+			bar.next(total_loss/dl)
+		res = board.update('train', total_loss/dl, getBest=True)
+		
+		# Evaluate the model
+		if evalData_loader is not None:
+			total_loss, dl= 0,0
+			with torch.no_grad():
+				for data in evalData_loader:
+					y_hat = model(data['x1'], data['x2'])
+					y1    = data['y']
+
+					loss = model.criterion(y_hat, y1)
+					total_loss += loss.item()
+					dl += y1.shape[0]
+					bar.next()
+			res = board.update('test', total_loss/dl, getBest=True)
+		bar.finish()
+		del bar
+		
+		if res:
+			model.save(os.path.join('pts', 'siam.pt'))
+	board.show(os.path.join('pics', 'siam.png'))
+
 def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rating')):
 	model.eval()
 	
-	pred_path = os.path.join('data', 'pred.csv')
+	pred_path = os.path.join('preds', 'pred.csv')
 
 	bar = MyBar('test', max=len(testData_loader))
 	Ids, lab, val = [], [], []
