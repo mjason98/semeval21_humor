@@ -135,8 +135,8 @@ def TrainRawEncoder():
 
 	model = makeModels('bencoder', 800, dpr=0.0)
 	model.save(os.path.join('pts', 'roberta.pt'))
-	# trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader,
-	# 			nameu='roberta', optim=model.makeOptimizer(lr=LR))
+	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader,
+				nameu='roberta', optim=model.makeOptimizer(lr=LR))
 
 	del t_loader
 	del e_loader
