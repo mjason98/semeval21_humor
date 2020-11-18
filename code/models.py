@@ -21,7 +21,7 @@ def offline(band: bool):
 	global OFFLINE
 	OFFLINE = band
 
-def make_bert_pretrained_model():
+def make_bert_pretrained_model(mod_only=False):
 	'''
 		This function return (tokenizer, model)
 	'''
@@ -34,7 +34,10 @@ def make_bert_pretrained_model():
 		tokenizer = AutoTokenizer.from_pretrained(OFFLINE_PATH)
 		model = AutoModel.from_pretrained(OFFLINE_PATH)
 
-	return tokenizer, model
+	if mod_only:
+		return model 
+	else:
+		return tokenizer, model
 
 def makeTrain_and_ValData(data_path:str, percent=10):
 	train_path = os.path.join('data', 'train_data.csv')
@@ -123,6 +126,29 @@ def make_BertRep_from_data(data_path:str, drops:list = ['humor_controversy', 'of
 
 # ================================ DATAS ========================================
 
+class RawDataset(Dataset):
+	def __init__(self, csv_file):
+		self.data_frame = pd.read_csv(csv_file)
+
+	def __len__(self):
+		return len(self.data_frame)
+
+	def __getitem__(self, idx):
+		if torch.is_tensor(idx):
+			idx = idx.tolist()
+		
+		ids  = self.data_frame.loc[idx, 'id']
+		sent  = self.data_frame.loc[idx, 'text']
+		
+		try:
+			value = self.data_frame.loc[idx, 'is_humor']
+			regv  = self.data_frame.loc[idx, 'humor_rating']
+		except:
+			value, regv = 0, 0.
+
+		sample = {'x': sent, 'y': value, 'v':regv, 'id':ids}
+		return sample
+
 class VecsDataset(Dataset):
 	def __init__(self, csv_file):
 		self.data_frame = pd.read_csv(csv_file)
@@ -166,6 +192,13 @@ class SiamDataset(Dataset):
 
 		sample = {'x1': sent1, 'x2': sent2, 'y': value}
 		return sample
+
+def makeDataSet_Raw(csv_path:str, batch, shuffle=True):
+	data   =  RawDataset(csv_path)
+	loader =  DataLoader(data, batch_size=batch,
+							shuffle=shuffle, num_workers=4,
+							drop_last=False)
+	return data, loader
 
 def makeDataSet_Vecs(csv_path:str, batch, shuffle=True):
 	data   =  VecsDataset(csv_path)
@@ -250,15 +283,15 @@ class ContrastiveLoss(torch.nn.Module):
 
 	# ver lo del contrastive con lo del label
     def forward(self, D, label):
-        loss_contrastive = torch.mean((1-label) * torch.pow(D, 2) +
-                                      (label) * torch.pow(torch.clamp(self.margin - D, min=0.0), 2))
+        loss_contrastive = torch.mean((label) * torch.pow(D, 2) +
+                                      (1-label) * torch.pow(torch.clamp(self.margin - D, min=0.0), 2))
         return loss_contrastive
 
 class Siam_Model(nn.Module):
 	def __init__(self, hidden_size, vec_size, dropout=0.2):
 		super(Siam_Model, self).__init__()
 		# self.criterion = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
-		self.criterion = ContrastiveLoss(2.0)
+		self.criterion = ContrastiveLoss(1.0)
 
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
 		                              nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
@@ -276,19 +309,84 @@ class Siam_Model(nn.Module):
 		self.load_state_dict(torch.load(path))
 
 	def save(self, path):
+		torch.save(self.state_dict(), path)
+
+class Z_Model(nn.Module):
+	def __init__(self, vec_size, dropout=0.2):
+		super(Z_Model, self).__init__()
+		self.criterion1 = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
+
+		self.Task1   = nn.Linear(vec_size, 2)
+		self.Task2   = nn.Linear(vec_size, 1)
+	def forward(self, X):
+		y1 = self.Task1(X)
+		y2 = self.Task2(X)
+
+		return y1, y2
+
+	def load(self, path):
+		self.load_state_dict(torch.load(path))
+
+	def save(self, path):
 		torch.save(self.state_dict(), path) 
+
+class Bencoder_Model(nn.Module):
+	def __init__(self, hidden_size, vec_size=768, dropout=0.2, max_length=120):
+		super(Bencoder_Model, self).__init__()
+		self.criterion1 = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
+		# self.criterion2 = nn.CrossEntropyLoss(reduction='none')#weight=torch.Tensor([0.7,0.3]))
+
+		self.max_length = max_length
+		self.tok, self.bert = make_bert_pretrained_model()
+		self.encoder = Encod_Model(hidden_size, vec_size, dropout=dropout)
+		
+	def forward(self, X, ret_vec=False):
+		#X = X.tolist()
+		ids  = self.tok(X, return_tensors='pt', truncation=True, padding=True, max_length=self.max_length)
+		out  = self.bert(**ids)
+		# vects = out[0][:,-1] # last or first
+		# vects = max_pool_op(out[0]) # Maxpool
+		vects = F.normalize(out[0].sum(dim=1), dim=-1) # Add and Norm
+		return self.encoder(vects, ret_vec=ret_vec)
+
+	def load(self, path):
+		self.encoder.load(path)
+		self.bert.from_pretrained(os.path.dirname(path))
+		self.tok.from_pretrained(os.path.dirname(path))
+
+	def save(self, path):
+		self.encoder.save(path)
+		self.bert.save_pretrained(os.path.dirname(path))
+		self.tok.save_pretrained(os.path.dirname(path))
 	
+	def makeOptimizer(self, lr=1e-5, decay=2e-5, ml=9/10):
+		pars = [{'params':self.encoder.parameters()}]
+		lr_t = lr
+		for l in self.bert.encoder.layer:
+			D = {'params':l.parameters(), 'lr':lr_t}
+			pars.append(D)
+			lr_t *= ml
+		#D = {'params':self.bert.pooler.parameters(), 'lr':lr_t}
+		pars.append(D)
+		return torch.optim.Adam(pars, lr=lr, weight_decay=decay)
+	
+
 def makeModels(name:str, size, in_size=768, dpr=0.2):
 	if name == 'encoder':
 		return Encod_Model(size, in_size, dropout=dpr)
+	elif name == 'bencoder':
+		return Bencoder_Model(size, in_size, dropout=dpr)
 	elif name == 'siam':
 		return Siam_Model(size, in_size, dropout=dpr)
+	elif name == 'zmod':
+		return Z_Model(in_size)
 	else:
 		print ('ERROR::NAME', name, 'not founded!!')
 
-def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1):
+def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, nameu='encoder', optim=None):
 	# eta   = 0.75
-	optim = torch.optim.Adam(model.parameters(), lr=lr)
+	if optim is None:
+		optim = torch.optim.Adam(model.parameters(), lr=lr)
 	model.train()
 
 	board = TorchBoard()
@@ -330,8 +428,8 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1):
 		del bar
 		
 		if res:
-			model.save(os.path.join('pts', 'encoder.pt'))
-	board.show(os.path.join('pics', 'encoder.png'))
+			model.save(os.path.join('pts', nameu+'.pt'))
+	board.show(os.path.join('pics', nameu+'.png'))
 
 def trainSiamModel(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1):
 	optim = torch.optim.Adam(model.parameters(), lr=lr)
@@ -380,7 +478,7 @@ def trainSiamModel(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1)
 			model.save(os.path.join('pts', 'siam.pt'))
 	board.show(os.path.join('pics', 'siam.png'))
 
-def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rating')):
+def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rating'), cleaner=[]):
 	model.eval()
 	
 	pred_path = os.path.join('preds', 'pred.csv')
@@ -410,3 +508,10 @@ def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rati
 	data.to_csv(pred_path, index=None, header=header)
 	del data
 	print ('# Predictions saved in', colorizar(pred_path))
+	
+	data = pd.read_csv(pred_path)
+	data.drop(cleaner, axis=1, inplace=True)
+	data.to_csv(pred_path, index=None)
+
+	if len(cleaner) > 0:
+		print ('# Cleaned from', ', '.join(cleaner) + '.')

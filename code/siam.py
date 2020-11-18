@@ -6,7 +6,6 @@ from sklearn.cluster import KMeans
 
 from .utils import MyBar, colorizar
 
-
 def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-mean'):
     '''
       For a cvs with vectors, find the K representatives an the M frotiers.
@@ -139,6 +138,68 @@ def makeSiamData(data_path:str, ref_folder='data', humor_label='y_c'):
     new_path = os.path.join('data', 'Siam'+os.path.basename(data_path))
     data.to_csv(new_path, index=None, header=header)
     return new_path
+
+def makeSiam_ZData(data_path:str, model, ref_folder='data', batch=16):
+    # files_pos = ['pos_center.txt', 'pos_frontier.txt']
+    # files_neg = ['neg_center.txt', 'neg_frontier.txt']
+    files_pos = ['pos_center.txt']
+    files_neg = ['neg_center.txt']
+    vectors_pos, vectors_neg = [], []
+    new_name = os.path.join('data', 'Z'+os.path.basename(data_path))
+    
+    # Reading the centers and the frontiers
+    for f in files_pos:
+        if not os.path.isfile(os.path.join(ref_folder, f)):
+            print ('ERROR::FILE file', f, 'not found in', ref_folder)
+            return
+        else:
+            with open(os.path.join(ref_folder, f), 'r') as file:
+                for line in file.readlines():
+                    vectors_pos.append(line.replace('\n', ''))
+    for f in files_neg:
+        if not os.path.isfile(os.path.join(ref_folder, f)):
+            print ('ERROR::FILE file', f, 'not found in', ref_folder)
+            return
+        else:
+            with open(os.path.join(ref_folder, f), 'r') as file:
+                for line in file.readlines():
+                    vectors_neg.append(line.replace('\n', ''))
+    pos_size, neg_size = len(vectors_pos), len(vectors_neg)
+    vectors_pos = np.array([v for v in map(lambda x: [float(s) for s in x.split()], vectors_pos)], dtype=np.float32)
+    vectors_neg = np.array([v for v in map(lambda x: [float(s) for s in x.split()], vectors_neg)], dtype=np.float32)
+    vectors_np  = np.concatenate([vectors_pos, vectors_neg], axis=0)
+    del vectors_neg
+    del vectors_pos
+    
+    data = pd.read_csv(data_path)
+    print ('# Making Z data from', colorizar(os.path.basename(data_path)))
+    bar = MyBar('data', max=len(data)//batch)
+    new_x = []
+
+    model.eval()
+    with torch.no_grad():
+        for i in range(0, len(data), batch):
+            end   = min(i+batch-1, len(data)-1)
+            texts = data.loc[i:end, 'x'].to_numpy().tolist()
+            texts = [np.array(v, dtype=np.float32) for v in map(lambda x: [float(s) for s in x.split()], texts)]
+            texts = [ np.concatenate([v.reshape(1,-1)]*int(pos_size+neg_size), axis=0) for v in texts]
+
+            texts = np.concatenate(texts, axis=0)
+            vec   = np.concatenate([vectors_np]*int(end-i+1), axis=0)
+            
+            y_hat = model(torch.from_numpy(texts), torch.from_numpy(vec))
+            y_hat = y_hat.reshape(-1,int(pos_size+neg_size)).numpy() #mirar esto
+            new_x.append(y_hat)
+            bar.next()
+    bar.finish()
+    new_x = np.concatenate(new_x, axis=0).tolist()
+    new_x = [s for s in map(lambda x: ' '.join([str(v) for v in x]), new_x)]
+    data.drop(['x'], axis=1, inplace=True)
+
+    new_head = [s for s in data.columns] + ['x']
+    data = pd.concat([data, pd.Series(new_x)], axis=1)
+    data.to_csv(new_name, index=None, header=new_head)
+    return new_name
 
 def convert2EncoderVec(data_name:str, model, loader):
     model.train()
