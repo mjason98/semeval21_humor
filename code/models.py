@@ -366,7 +366,7 @@ class Bencoder_Model(nn.Module):
 			D = {'params':l.parameters(), 'lr':lr_t}
 			pars.append(D)
 			lr_t *= ml
-		#D = {'params':self.bert.pooler.parameters(), 'lr':lr_t}
+		D = {'params':self.bert.pooler.parameters(), 'lr':lr_t}
 		pars.append(D)
 		return torch.optim.Adam(pars, lr=lr, weight_decay=decay)
 	
