@@ -22,6 +22,7 @@ TEST_DATA_PATH  = 'data/public_dev.csv'
 BATCH  = 64
 EPOCHS = 12
 LR 	   = 1e-5
+ONLINE_TR = True
 
 SEQUENCE_LENGTH = 120
 BERT_BATCH      = 32
@@ -52,6 +53,7 @@ def check_params(arg=None):
 	global TEST_DATA_PATH
 	global DATA_PATH
 	global EVAL_DATA_PATH
+	global ONLINE_TR
 
 	parse = argparse.ArgumentParser(description='SemEval2021 Humor')
 	parse.add_argument('-l', '--learning_rate', help='The learning rate to the optimizer', 
@@ -66,6 +68,8 @@ def check_params(arg=None):
 					   required=False, default=DATA_PATH)
 	parse.add_argument('-d', '--dev_data', help='Development Data', 
 					   required=False, default=EVAL_DATA_PATH)
+	parse.add_argument('-o', '--online', help='Download the transformers from huginface, default True', 
+					   required=False, default=True)
    
 	returns = parse.parse_args(arg)
 
@@ -75,7 +79,7 @@ def check_params(arg=None):
 	TEST_DATA_PATH = returns.predict
 	DATA_PATH = returns.train_data
 	EVAL_DATA_PATH = returns.dev_data
-
+	ONLINE_TR = returns.online
 
 def prepare_environment():
 	if not os.path.isdir('data'):
@@ -90,7 +94,8 @@ def prepare_environment():
 	torch.manual_seed(12345)
 	np.random.seed(12345)
 	
-	offline(True) # cambiar esto
+	if not ONLINE_TR:
+		offline(True)
 
 def clear_environment():
 	delete_transformers()
