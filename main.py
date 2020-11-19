@@ -18,7 +18,7 @@ TEST_DATA_PATH  = 'data/public_dev.csv'
 #==============================================
 
 BATCH  = 64
-EPOCHS = 10
+EPOCHS = 12
 LR 	   = 1e-5
 
 SEQUENCE_LENGTH = 120

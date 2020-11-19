@@ -343,8 +343,7 @@ class Bencoder_Model(nn.Module):
 		self.to(device=self.device)
 		
 	def forward(self, X, ret_vec=False):
-		X    = X.to(device=self.device)
-		ids  = self.tok(X, return_tensors='pt', truncation=True, padding=True, max_length=self.max_length)
+		ids  = self.tok(X, return_tensors='pt', truncation=True, padding=True, max_length=self.max_length).to(device=self.device)
 		out  = self.bert(**ids)
 		# vects = out[0][:,-1] # last or first
 		# vects = max_pool_op(out[0]) # Maxpool
