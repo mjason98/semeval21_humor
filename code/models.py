@@ -385,7 +385,8 @@ def makeModels(name:str, size, in_size=768, dpr=0.2):
 		print ('ERROR::NAME', name, 'not founded!!')
 
 def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, nameu='encoder', optim=None):
-	# eta   = 0.75
+	if epochs <= 0:
+		return
 	if optim is None:
 		optim = torch.optim.Adam(model.parameters(), lr=lr)
 	model.train()
@@ -489,12 +490,15 @@ def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rati
 	bar = MyBar('test', max=len(testData_loader))
 	Ids, lab, val = [], [], []
 	
+	cpu0 = torch.device("cpu")
 	with torch.no_grad():
 		for data in testData_loader:
 			y_hat, y_val = model(data['x'])
-			ids = data['id'].squeeze()
+			y_hat, y_val = y_hat.to(device=cpu0), y_val.to(device=cpu0)
+			
 			y_hat = y_hat.argmax(dim=-1).squeeze()
 			y_val = y_val.squeeze()
+			ids = data['id'].squeeze()
 			
 			bar.next()
 			for i in range(ids.shape[0]):

@@ -1,5 +1,7 @@
 import os
+import sys
 import torch
+import argparse
 import numpy as np
 
 from code.models import makeTrain_and_ValData, make_BertRep_from_data
@@ -43,6 +45,38 @@ SIAM_EPOCH   = 10
 K,M          = 12, 5
 DEVICE       = None
 
+def check_params(arg=None):
+	global BATCH
+	global LR
+	global EPOCHS
+	global TEST_DATA_PATH
+	global DATA_PATH
+	global EVAL_DATA_PATH
+
+	parse = argparse.ArgumentParser(description='SemEval2021 Humor')
+	parse.add_argument('-l', '--learning_rate', help='The learning rate to the optimizer', 
+					   required=False, default=LR)
+	parse.add_argument('-b', '--batchs', help='Amount of batchs', 
+					   required=False, default=BATCH)
+	parse.add_argument('-e', '--epochs', help='Amount of epochs', 
+					   required=False, default=EPOCHS)
+	parse.add_argument('-p', '--predict', help='Unlabeled Data', 
+					   required=False, default=TEST_DATA_PATH)
+	parse.add_argument('-t', '--train_data', help='Train Data', 
+					   required=False, default=DATA_PATH)
+	parse.add_argument('-d', '--dev_data', help='Development Data', 
+					   required=False, default=EVAL_DATA_PATH)
+   
+	returns = parse.parse_args(arg)
+
+	LR    = float(returns.learning_rate)
+	BATCH = int(returns.batchs)
+	EPOCHS = int(returns.epochs)
+	TEST_DATA_PATH = returns.predict
+	DATA_PATH = returns.train_data
+	EVAL_DATA_PATH = returns.dev_data
+
+
 def prepare_environment():
 	if not os.path.isdir('data'):
 		os.mkdir('data')
@@ -56,7 +90,7 @@ def prepare_environment():
 	torch.manual_seed(12345)
 	np.random.seed(12345)
 	
-	# offline(True) # cambiar esto
+	offline(True) # cambiar esto
 
 def clear_environment():
 	delete_transformers()
@@ -131,6 +165,10 @@ def makeFinalData_Model():
 				lr=Z_LR, nameu='zmod')
 
 def TrainRawEncoder():
+	global DATA_PATH
+	global EVAL_DATA_PATH
+	global TEST_DATA_PATH
+
 	t_data, t_loader = makeDataSet_Raw(DATA_PATH, batch=BATCH)
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH)
 
@@ -149,6 +187,7 @@ def TrainRawEncoder():
 	evaluateModels(model, loader, cleaner=['humor_rating'])
 
 if __name__ == '__main__':
+	check_params(arg=sys.argv[1:])
 	prepare_environment()
 
 	# Spliting data
