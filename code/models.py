@@ -339,9 +339,11 @@ class Bencoder_Model(nn.Module):
 		self.max_length = max_length
 		self.tok, self.bert = make_bert_pretrained_model()
 		self.encoder = Encod_Model(hidden_size, vec_size, dropout=dropout)
+		self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+		self.to(device=self.device)
 		
 	def forward(self, X, ret_vec=False):
-		#X = X.tolist()
+		X    = X.to(device=self.device)
 		ids  = self.tok(X, return_tensors='pt', truncation=True, padding=True, max_length=self.max_length)
 		out  = self.bert(**ids)
 		# vects = out[0][:,-1] # last or first
@@ -379,7 +381,7 @@ def makeModels(name:str, size, in_size=768, dpr=0.2):
 	elif name == 'siam':
 		return Siam_Model(size, in_size, dropout=dpr)
 	elif name == 'zmod':
-		return Z_Model(in_size)
+		return Z_Model(in_size, device=device)
 	else:
 		print ('ERROR::NAME', name, 'not founded!!')
 

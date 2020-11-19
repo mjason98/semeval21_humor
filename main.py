@@ -41,6 +41,7 @@ SIAM_DROPOUT = 0.0
 SIAM_LR      = 0.001
 SIAM_EPOCH   = 10
 K,M          = 12, 5
+DEVICE       = None
 
 def prepare_environment():
 	if not os.path.isdir('data'):
