@@ -400,7 +400,8 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, na
 			
 			# Multi-Task learning
 			y_hat, y_val = model(data['x'])
-			y1, y2  = data['y'], data['v']
+			y1 = data['y'].to(device=model.device)
+			y2 = data['v'].to(device=model.device)
 
 			loss = model.criterion1(y_hat, y1)
 			loss.backward()
@@ -419,7 +420,8 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, na
 			with torch.no_grad():
 				for data in evalData_loader:
 					y_hat, y_val = model(data['x'])
-					y1, y2  = data['y'], data['v']
+					y1 = data['y'].to(device=model.device)
+					y2 = data['v'].to(device=model.device)
 
 					total_acc += (y1 == y_hat.argmax(dim=-1)).sum().item()
 					dl += y1.shape[0]
