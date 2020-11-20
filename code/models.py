@@ -431,57 +431,10 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, na
 			model.save(os.path.join('pts', nameu+'.pt'))
 	board.show(os.path.join('pics', nameu+'.png'))
 
-def trainSiamModel(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1):
-	optim = torch.optim.Adam(model.parameters(), lr=lr)
-	model.train()
-
-	board = TorchBoard()
-	board.setFunct(min)
-	
-	for e in range(epochs):
-		bar = MyBar('Epoch '+str(e+1)+' '*(int(math.log10(epochs)+1) - int(math.log10(e+1)+1)) , 
-					max=len(Data_loader)+(len(evalData_loader if evalData_loader is not None else 0)))
-		total_loss, dl = 0., 0.
-		for data in Data_loader:
-			optim.zero_grad()
-			
-			y_hat = model(data['x1'], data['x2'])
-			y1    = data['y']
-
-			loss = model.criterion(y_hat, y1)
-			loss.backward()
-			optim.step()
-
-			with torch.no_grad():
-				total_loss += loss.item()
-				dl += y1.shape[0]
-			bar.next(total_loss/dl)
-		res = board.update('train', total_loss/dl, getBest=True)
-		
-		# Evaluate the model
-		if evalData_loader is not None:
-			total_loss, dl= 0,0
-			with torch.no_grad():
-				for data in evalData_loader:
-					y_hat = model(data['x1'], data['x2'])
-					y1    = data['y']
-
-					loss = model.criterion(y_hat, y1)
-					total_loss += loss.item()
-					dl += y1.shape[0]
-					bar.next()
-			res = board.update('test', total_loss/dl, getBest=True)
-		bar.finish()
-		del bar
-		
-		if res:
-			model.save(os.path.join('pts', 'siam.pt'))
-	board.show(os.path.join('pics', 'siam.png'))
-
-def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rating'), cleaner=[]):
+def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rating'), cleaner=[], name='pred'):
 	model.eval()
 	
-	pred_path = os.path.join('preds', 'pred.csv')
+	pred_path = os.path.join('preds', name+'.csv')
 
 	bar = MyBar('test', max=len(testData_loader))
 	Ids, lab, val = [], [], []
@@ -512,9 +465,8 @@ def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rati
 	del data
 	print ('# Predictions saved in', colorizar(pred_path))
 	
-	data = pd.read_csv(pred_path)
-	data.drop(cleaner, axis=1, inplace=True)
-	data.to_csv(pred_path, index=None)
-
 	if len(cleaner) > 0:
+		data = pd.read_csv(pred_path)
+		data.drop(cleaner, axis=1, inplace=True)
+		data.to_csv(pred_path, index=None)
 		print ('# Cleaned from', ', '.join(cleaner) + '.')

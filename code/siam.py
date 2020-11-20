@@ -202,16 +202,18 @@ def makeSiam_ZData(data_path:str, model, ref_folder='data', batch=16):
     return new_name
 
 def convert2EncoderVec(data_name:str, model, loader):
-    model.train()
+    model.eval()
     new_name = os.path.join('data', data_name + '.csv')
     
     IDs, YC, YV, X = [], [], [], []
 
     print ('# Creating', colorizar(os.path.basename(new_name)))
     bar = MyBar('change', max=len(loader))
+
+    cpu0 = torch.device("cpu")
     with torch.no_grad():
         for data in loader:
-            x = model(data['x'], ret_vec=True).numpy()
+            x = model(data['x'], ret_vec=True).to(device=cpu0).numpy()
             try:
                 y_c = data['y']
             except:
@@ -246,14 +248,14 @@ def convert2EncoderVec(data_name:str, model, loader):
         del IDs
     if len(YC) > 0:
         conca.append(pd.Series(YC))
-        n_head.append('y_c')
+        n_head.append('is_humor')
         del YC
     if len(YV) > 0:
         conca.append(pd.Series(YV))
-        n_head.append('y_v')
+        n_head.append('humor_rating')
         del YV
     conca.append(pd.Series(X))
-    n_head.append('x')
+    n_head.append('vecs')
     del X
 
     data = pd.concat(conca, axis=1)
