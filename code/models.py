@@ -351,16 +351,12 @@ class Bencoder_Model(nn.Module):
 		return self.encoder(vects, ret_vec=ret_vec)
 
 	def load(self, path):
-		self.encoder.load(path)
-		self.bert.from_pretrained(os.path.dirname(path))
-		self.tok.from_pretrained(os.path.dirname(path))
+		self.load_state_dict(torch.load(path))
 
 	def save(self, path):
-		self.encoder.save(path)
-		self.bert.save_pretrained(os.path.dirname(path))
-		self.tok.save_pretrained(os.path.dirname(path))
+		torch.save(self.state_dict(), path) 
 	
-	def makeOptimizer(self, lr=1e-5, decay=2e-5, ml=9/10):
+	def makeOptimizer(self, lr=3e-5, decay=2e-5, ml=9/10):
 		pars = [{'params':self.encoder.parameters()}]
 		lr_t = lr
 		for l in self.bert.encoder.layer:

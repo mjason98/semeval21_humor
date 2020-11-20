@@ -21,7 +21,7 @@ TEST_DATA_PATH  = 'data/public_dev.csv'
 
 BATCH  = 64
 EPOCHS = 12
-LR 	   = 1e-5
+LR 	   = 3e-5
 ONLINE_TR = True
 
 SEQUENCE_LENGTH = 120
@@ -178,7 +178,6 @@ def TrainRawEncoder():
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH)
 
 	model = makeModels('bencoder', 800, dpr=0.0)
-	model.save(os.path.join('pts', 'roberta.pt'))
 	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader,
 				nameu='roberta', optim=model.makeOptimizer(lr=LR))
 
