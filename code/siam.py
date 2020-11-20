@@ -201,11 +201,11 @@ def makeSiam_ZData(data_path:str, model, ref_folder='data', batch=16):
     data.to_csv(new_name, index=None, header=new_head)
     return new_name
 
-def convert2EncoderVec(data_name:str, model, loader):
+def convert2EncoderVec(data_name:str, model, loader, save_pickle=False, save_as_numpy=False):
     model.eval()
-    new_name = os.path.join('data', data_name + '.csv')
-    
     IDs, YC, YV, X = [], [], [], []
+
+    new_name = os.path.join('data', data_name+'.csv' if not save_pickle else data_name+'.pkl')
 
     print ('# Creating', colorizar(os.path.basename(new_name)))
     bar = MyBar('change', max=len(loader))
@@ -241,6 +241,17 @@ def convert2EncoderVec(data_name:str, model, loader):
             bar.next()
     bar.finish()
 
+    if save_as_numpy:
+        X_t = [v for v in map(lambda x: [float(s) for s in x.split()], X)]
+        X_t = np.array(X_t, dtype=np.float32)
+        np.save(os.path.join('data', data_name+'.npy'), X_t)
+        del X_t
+        
+        if len(IDs) > 0:
+            ids_t = np.array([int(i) for i in IDs], dtype=np.int32)
+            np.save(os.path.join('data', data_name+'_id.npy'), ids_t)
+            del ids_t
+
     conca, n_head = [], []
     if len(IDs) > 0:
         conca.append(pd.Series(IDs))
@@ -259,5 +270,8 @@ def convert2EncoderVec(data_name:str, model, loader):
     del X
 
     data = pd.concat(conca, axis=1)
-    data.to_csv(new_name, index=None, header=n_head)
+    if save_pickle:
+        data.to_pickle(new_name)
+    else:
+        data.to_csv(new_name, index=None, header=n_head)
     return new_name

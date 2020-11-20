@@ -135,22 +135,27 @@ def TrainRawEncoder():
 	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader,
 				nameu='roberta', optim=model.makeOptimizer(lr=LR))
 
-	# Loading the best fit model
-	model.load(os.path.join('pts', 'roberta.pt'))
-
-	# Convert the data into vectors
-	DATA_PATH      = convert2EncoderVec('train_en', model, t_loader)
-	EVAL_DATA_PATH = convert2EncoderVec('dev_en', model, e_loader)
-
 	del t_loader
 	del e_loader
 	del t_data
 	del e_data
 
-	data, loader   = makeDataSet_Raw(TEST_DATA_PATH, batch=BATCH, shuffle=False)
-	TEST_DATA_PATH = convert2EncoderVec('test_en', model, loader)
-	# evaluateModels(model, loader, cleaner=['humor_rating'], name='pred_en')
+	# Loading the best fit model
+	model.load(os.path.join('pts', 'roberta.pt'))
+	data, loader     = makeDataSet_Raw(TEST_DATA_PATH, batch=BATCH, shuffle=False)
+	t_data, t_loader = makeDataSet_Raw(DATA_PATH, batch=BATCH, shuffle=False)
+	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH, shuffle=False)
 
+	# evaluateModels(model, loader, cleaner=['humor_rating'], name='pred_en')
+	# Convert the data into vectors
+	DATA_PATH      = convert2EncoderVec('train_en', model, t_loader, save_as_numpy=True)
+	EVAL_DATA_PATH = convert2EncoderVec('dev_en', model, e_loader, save_as_numpy=True)
+	TEST_DATA_PATH = convert2EncoderVec('test_en', model, loader, save_as_numpy=True)
+	
+	del t_loader
+	del e_loader
+	del t_data
+	del e_data
 	del loader
 	del data 
 
