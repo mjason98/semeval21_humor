@@ -223,7 +223,7 @@ def makeVocabFromData(filepath):
 
 	return dict([(i, 5) for i in sorted(c, reverse=True)])
 
-def projectData2D(data_path:str, save_name='2Data'):
+def projectData2D(data_path:str, save_name='2Data', use_centers=False):
 	'''
 		Project the vetors in 2d plot
 
@@ -231,11 +231,25 @@ def projectData2D(data_path:str, save_name='2Data'):
 	'''
 	data = pd.read_csv(data_path)
 
-	np_data = data.drop(['y_c','y_v'], axis=1).to_numpy().tolist()
+	np_data = data.drop(['is_humor','humor_rating', 'id'], axis=1).to_numpy().tolist()
 	np_data = [i for i in map(lambda x: [float(v) for v in x[0].split()], np_data)]
 	np_data = np.array(np_data, dtype=np.float32)
 
+	L = []
+	if use_centers:
+		P = ['neg_center.txt', 'pos_center.txt']
+		for l in P:
+			with open(os.path.join('data', l), 'r') as file:
+				lines = file.readlines()
+				lines = np.array([[float(v) for v in x.split()] for x in lines], dtype=np.float32)
+				L.append(lines)
+	L = np.concatenate(L, axis=0)
+	# axes.scatter(lines[:,0], lines[:,1], c='r')
+
 	print ('Projecting', colorizar(os.path.basename(data_path)), 'in 2d vectors')
+	np_data = np.concatenate([np_data, L], axis=0)
+	L = L.shape[0]
+
 	X_embb = TSNE(n_components=2).fit_transform(np_data)
 	#X_embb = PCA(n_components=2, svd_solver='full').fit_transform(np_data)
 	#X_embb = TruncatedSVD(n_components=2).fit_transform(np_data)
@@ -244,17 +258,23 @@ def projectData2D(data_path:str, save_name='2Data'):
 	
 	D_1, D_2 = [], []
 	for i in range(len(data)):
-		if int(data.loc[i, 'y_c']) == 0:
+		if int(data.loc[i, 'is_humor']) == 0:
 			D_1.append([X_embb[i,0], X_embb[i,1]])
 		else:
 			D_2.append([X_embb[i,0], X_embb[i,1]])
-	del X_embb
+	X_embb = X_embb[-L:]
 
 	D_1, D_2 = np.array(D_1), np.array(D_2)
 	fig , axes = plt.subplots()
-	axes.scatter(D_1[:,0], D_1[:,1])
-	axes.scatter(D_2[:,0], D_2[:,1])
-	# fig.legend()
+	axes.scatter(D_1[:,0], D_1[:,1], label='neg', c='gray')
+	axes.scatter(D_2[:,0], D_2[:,1], label='pos', c='b')
+
+	axes.scatter(X_embb[:,0], X_embb[:,1], label='centers', c='r')
+
+	fig.legend()
 	fig.savefig(os.path.join('pics', save_name+'.png'))
+	# plt.show()
 	del fig
 	del axes
+	del X_embb
+	

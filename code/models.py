@@ -178,19 +178,20 @@ class SiamDataset(Dataset):
 	def __len__(self):
 		return len(self.data_frame)
 
-	def transF(self, text):
-		text = [ float(i) for i in text.split() ]
+	def transF(self, text1, text2):
+		text1 = [ float(i) for i in text1.split() ]
+		text2 = [ float(i) for i in text2.split() ]
+		text = text1 + text2
 		return torch.Tensor(text).float()
 
 	def __getitem__(self, idx):
 		if torch.is_tensor(idx):
 			idx = idx.tolist()
 			
-		sent1  = self.transF(self.data_frame.loc[idx, 'x'])
-		sent2  = self.transF(self.data_frame.loc[idx, 'xr'])
-		value = self.data_frame.loc[idx, 'y_c']
+		sent1  = self.transF(self.data_frame.loc[idx, 'vecs'], self.data_frame.loc[idx, 'vecs_siam'])
+		value = self.data_frame.loc[idx, 'is_humor']
 
-		sample = {'x1': sent1, 'x2': sent2, 'y': value}
+		sample = {'x': sent1, 'v': 0, 'y': value}
 		return sample
 
 def makeDataSet_Raw(csv_path:str, batch, shuffle=True):
@@ -247,13 +248,9 @@ def makePredictData(csv_path:str, batch):
 class Encod_Model(nn.Module):
 	def __init__(self, hidden_size, vec_size, dropout=0.2):
 		super(Encod_Model, self).__init__()
-		self.criterion1 = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
-		# self.criterion2 = nn.CrossEntropyLoss(reduction='none')#weight=torch.Tensor([0.7,0.3]))
-		# self.nora     = nn.BatchNorm1d(hidden_size*2)
-
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
 		                              nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
-									  nn.Linear(hidden_size//2, hidden_size//4), nn.LeakyReLU())
+									  nn.Linear(hidden_size//2, 64), nn.LeakyReLU())
 		self.Task1   = nn.Linear(hidden_size//4, 2)
 		self.Task2   = nn.Linear(hidden_size//4, 1)
 		
@@ -283,27 +280,33 @@ class ContrastiveLoss(torch.nn.Module):
 
 	# ver lo del contrastive con lo del label
     def forward(self, D, label):
-        loss_contrastive = torch.mean((label) * torch.pow(D, 2) +
-                                      (1-label) * torch.pow(torch.clamp(self.margin - D, min=0.0), 2))
+        loss_contrastive = torch.mean((1-label) * torch.pow(D, 2) +
+                                      (label) * torch.pow(torch.clamp(self.margin - D, min=0.0), 2))
         return loss_contrastive
 
 class Siam_Model(nn.Module):
 	def __init__(self, hidden_size, vec_size, dropout=0.2):
 		super(Siam_Model, self).__init__()
 		# self.criterion = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
-		self.criterion = ContrastiveLoss(1.0)
+		self.criterion1 = ContrastiveLoss(1.0)
 
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
 		                              nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
 									  nn.Linear(hidden_size//2, hidden_size//4))
 		# self.Task1   = nn.Linear(hidden_size//4, 2)
-	def forward(self, X1, X2):
+		self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+		self.to(device=self.device)
+
+	def forward(self, X):
+		size = X.shape[1] //2
+		X1, X2 = X[:,:size].to(device=self.device), X[:,size:].to(device=self.device)
+
 		y1 = self.Dense1(X1)
 		y2 = self.Dense1(X2)
 
 		# distance function
 		euclidean_distance = F.pairwise_distance(y1, y2)
-		return euclidean_distance
+		return euclidean_distance, 0
 
 	def load(self, path):
 		self.load_state_dict(torch.load(path))
@@ -380,7 +383,7 @@ def makeModels(name:str, size, in_size=768, dpr=0.2):
 	else:
 		print ('ERROR::NAME', name, 'not founded!!')
 
-def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, nameu='encoder', optim=None):
+def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, nameu='encoder', optim=None, b_fun=None, smood=False):
 	if epochs <= 0:
 		return
 	if optim is None:
@@ -388,6 +391,8 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, na
 	model.train()
 
 	board = TorchBoard()
+	if b_fun is not None:
+		board.setFunct(b_fun)
 	for e in range(epochs):
 		bar = MyBar('Epoch '+str(e+1)+' '*(int(math.log10(epochs)+1) - int(math.log10(e+1)+1)) , 
 					max=len(Data_loader)+(len(evalData_loader if evalData_loader is not None else 0)))
@@ -429,7 +434,7 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, na
 		
 		if res:
 			model.save(os.path.join('pts', nameu+'.pt'))
-	board.show(os.path.join('pics', nameu+'.png'))
+	board.show(os.path.join('pics', nameu+'.png'), plot_smood=smood)
 
 def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rating'), cleaner=[], name='pred'):
 	model.eval()
