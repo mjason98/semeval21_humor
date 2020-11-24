@@ -251,8 +251,8 @@ class Encod_Model(nn.Module):
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
 		                              nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
 									  nn.Linear(hidden_size//2, 64), nn.LeakyReLU())
-		self.Task1   = nn.Linear(hidden_size//4, 2)
-		self.Task2   = nn.Linear(hidden_size//4, 1)
+		self.Task1   = nn.Linear(64, 2)
+		self.Task2   = nn.Linear(64, 1)
 		
 	def forward(self, X, ret_vec=False):
 		y_hat = self.Dense1(X)
@@ -359,7 +359,7 @@ class Bencoder_Model(nn.Module):
 	def save(self, path):
 		torch.save(self.state_dict(), path) 
 	
-	def makeOptimizer(self, lr=3e-5, decay=2e-5, ml=9/10):
+	def makeOptimizer(self, lr=3e-5, decay=2e-5, ml=9/10, algorithm='adam'):
 		pars = [{'params':self.encoder.parameters()}]
 		lr_t = lr
 		for l in self.bert.encoder.layer:
@@ -368,7 +368,11 @@ class Bencoder_Model(nn.Module):
 			lr_t *= ml
 		D = {'params':self.bert.pooler.parameters(), 'lr':lr_t}
 		pars.append(D)
-		return torch.optim.Adam(pars, lr=lr, weight_decay=decay)
+
+		if algorithm == 'adam':
+			return torch.optim.Adam(pars, lr=lr, weight_decay=decay)
+		elif algorithm == 'rms':
+			return torch.optim.RMSprop(pars, lr=lr, weight_decay=decay)
 	
 
 def makeModels(name:str, size, in_size=768, dpr=0.2):

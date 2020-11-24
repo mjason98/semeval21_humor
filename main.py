@@ -25,6 +25,7 @@ LR 	   = 3e-5
 ONLINE_TR = True
 HSIZE    = 800
 PRED_BATCH = 16
+BERT_OPTIM = 'rms' # ['adam' or 'rms']
 
 SEQUENCE_LENGTH = 120
 
@@ -43,6 +44,7 @@ def check_params(arg=None):
 	global DATA_PATH
 	global EVAL_DATA_PATH
 	global ONLINE_TR
+	global BERT_OPTIM
 
 	INFOMAP_PATH = '/DATA/work_space/2-AI/3-SemEval21/infomap-master'
 	INFOMAP_EX   = 'Infomap'
@@ -64,6 +66,8 @@ def check_params(arg=None):
 					   required=False, default=INFOMAP_PATH)
 	parse.add_argument('--infomap-name', dest='iname', help='Infomap executable name', 
 					   required=False, default=INFOMAP_EX)
+	parse.add_argument('--optim', dest='optim', help='Optimazer to use in train', 
+					   required=False, default=BERT_OPTIM, choices=['adam', 'rms'])
 	parse.add_argument('--offline', help='Use a local transformer, default False', 
 					   required=False, action='store_false', default=True)
    
@@ -76,6 +80,7 @@ def check_params(arg=None):
 	DATA_PATH = returns.train_data
 	EVAL_DATA_PATH = returns.dev_data
 	ONLINE_TR = bool(returns.offline)
+	BERT_OPTIM = returns.optim
 	
 	# Set Infomap staf
 	setInfomapData(INFOMAP_PATH, INFOMAP_EX)
@@ -203,8 +208,8 @@ if __name__ == '__main__':
 	DATA_PATH, EVAL_DATA_PATH = makeTrain_and_ValData(DATA_PATH, percent=10)
 
 	TrainRawEncoder()
-	prep_Siam()
-	pred_with_Siam()
+	# prep_Siam()
+	# pred_with_Siam()
 	
 	# makeFinalData_Model()
 
