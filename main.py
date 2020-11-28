@@ -33,8 +33,8 @@ SIAM_BATCH   = 64
 SIAM_SIZE    = 32
 SIAM_DROPOUT = 0.0
 SIAM_LR      = 0.001
-SIAM_EPOCH   = 200
-K,M          = 3, 5
+SIAM_EPOCH   = 100
+K,M          = 4, 8
 
 def check_params(arg=None):
 	global BATCH
@@ -164,9 +164,9 @@ def prep_Siam():
 	# DATA_PATH      = 'data/train_en.csv'
 	# EVAL_DATA_PATH = 'data/dev_en.csv'
 
-	findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral=0.1)
-	projectData2D(DATA_PATH, save_name='2Data_igraph', use_centers=True)
-
+	findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral=0.1, max_module=10)
+	projectData2D(DATA_PATH, save_name='2DataIMultiSelect', use_centers=True)
+	
 	dts = makeSiamData(DATA_PATH, K, M, ref_folder='data', distance='euclidea')
 	des = makeSiamData(EVAL_DATA_PATH, K, M, ref_folder='data', distance='euclidea')
 	# dts = 'data/Siamtrain_en.csv'
@@ -208,8 +208,8 @@ if __name__ == '__main__':
 	DATA_PATH, EVAL_DATA_PATH = makeTrain_and_ValData(DATA_PATH, percent=10)
 
 	TrainRawEncoder()
-	# prep_Siam()
-	# pred_with_Siam()
+	prep_Siam()
+	pred_with_Siam()
 	
 	# makeFinalData_Model()
 

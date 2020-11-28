@@ -21,7 +21,7 @@ def setInfomapData(p1, p2):
     INFOMAP_PATH = p1
     INFOMAP_EX   = p2
 
-def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_distance='euclidea', eps=1e-7, umbral = 0.05):
+def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_distance='euclidea', eps=1e-7, umbral = 0.05, max_module=1):
     '''
       For a cvs with vectors, find the K representatives an the M frotiers.
       This uses the method parameter to determine the algorithm to use in
@@ -34,9 +34,11 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
       
       M: number of frontier's vectors
       
-      method: the algorithm to use: ['k-means', 'i-graph']
+      method: the algorithm to use: ['k-means', 'i-graph', 'c-graph']
       
       method_distance: Distance function to use in the method: ['euclidea', 'cosine']
+
+      max_module: maximun nodes to use per module using infomap algorithm ('i-graph')
     '''
     Me = ['k-means', 'i-graph']
     Me_d = ['euclidea', 'cosine']
@@ -181,25 +183,35 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
         os.system(' '.join([INFOMAP, neg_name, os.path.abspath('data'), '--silent']))
 
         # Extract the modules center node by max flux criteria
-        pos_modules = 0
+        pos_modules, pos_i = 0, 0
         with open(os.path.join('data', os.path.basename(pos_name)+'.tree'), 'r') as file:
             for lines in file.readlines():
                 if lines[0] == '#':
                     continue
                 mod = int(lines.split()[0].split(':')[0])
                 if mod > pos_modules:
+                    pos_i = 1
                     pos_modules = mod
                     pos_c.append(pos[ int(lines.split()[-1]) ].tolist())
+                elif mod == pos_modules and pos_i < max_module:
+                    pos_i += 1
+                    pos_c.append(pos[ int(lines.split()[-1]) ].tolist())
         
-        neg_modules = 0
+        neg_modules, neg_i = 0, 0
         with open(os.path.join('data', os.path.basename(neg_name)+'.tree'), 'r') as file:
             for lines in file.readlines():
                 if lines[0] == '#':
                     continue
                 mod = int(lines.split()[0].split(':')[0])
                 if mod > neg_modules:
+                    neg_i = 1
                     neg_modules = mod
                     neg_c.append(neg[ int(lines.split()[-1]) ].tolist())
+                elif mod == neg_modules and neg_i < max_module:
+                    neg_i += 1
+                    neg_c.append(neg[ int(lines.split()[-1]) ].tolist())
+    # elif method == 'c-graph':
+
 
     with open(os.path.join('data', 'pos_center.txt'), 'w') as file:
         for l in pos_c:
@@ -253,15 +265,29 @@ def makeSiamData(data_path:str, K, M, ref_folder='data', humor_label='is_humor',
         old_data.append([])
         header.append(s)
     
+    pos_centers, neg_centers = [], []
+    if os.path.isfile('data/neg_center.txt'):
+        with open('data/neg_center.txt', 'r') as file:
+            for line in file.readlines():
+                neg_centers.append(line.replace('\n', ''))
+    if os.path.isfile('data/pos_center.txt'):
+        with open('data/pos_center.txt', 'r') as file:
+            for line in file.readlines():
+                pos_centers.append(line.replace('\n', ''))
+    pos_centers = pos_centers[:min(K, len(pos_centers))]
+    neg_centers = neg_centers[:min(K, len(neg_centers))]
+    
     print ('# Making Siam data from', colorizar(os.path.basename(data_path)))
     bar = MyBar('data', max=len(data))
     for i in range(len(data)):
         dt, da, lab = None, None, None
         if int(data.loc[i, humor_label]) == 0:
-            dt = _findMyRandom(neg, K)
+            # dt = _findMyRandom(neg, K)
+            dt = neg_centers
             da = _findMyCloser(pos, data.loc[i, 'vecs'], M, distance=distance)
         else:
-            dt = _findMyRandom(pos, K)
+            # dt = _findMyRandom(pos, K)
+            dt = pos_centers
             da = _findMyCloser(neg, data.loc[i, 'vecs'], M, distance=distance)
 
         for v in dt:
@@ -436,7 +462,7 @@ def predictManual(data_path:str, N_pos, N_neg, save_name='prediction_manual', sh
     for i in range(len(data)):
         vec = np.array([float(s) for s in data.loc[i, 'vecs'].split()], dtype=np.float32)
         assert ( (N_pos+N_neg) == vec.shape[0] )
-        v1, v2 = vec[:N_pos].mean(), vec[N_pos:].mean()
+        v1, v2 = vec[:N_pos].min(), vec[N_pos:].min()
         val = '1' if v1 < v2 else '0'
         
         if shost_compare:
