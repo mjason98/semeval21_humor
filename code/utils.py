@@ -266,10 +266,10 @@ def projectData2D(data_path:str, save_name='2Data', use_centers=False):
 
 	D_1, D_2 = np.array(D_1), np.array(D_2)
 	fig , axes = plt.subplots()
-	axes.scatter(D_1[:,0], D_1[:,1], label='neg', c='gray')
-	axes.scatter(D_2[:,0], D_2[:,1], label='pos', c='b')
+	axes.scatter(D_1[:,0], D_1[:,1], label='neg', c='gray', alpha=0.5)
+	axes.scatter(D_2[:,0], D_2[:,1], label='pos', c='b', alpha=0.5)
 
-	axes.scatter(X_embb[:,0], X_embb[:,1], label='centers', c='r')
+	axes.scatter(X_embb[:,0], X_embb[:,1], label='centers', c='r', alpha=0.5)
 
 	fig.legend()
 	fig.savefig(os.path.join('pics', save_name+'.png'))

@@ -5,6 +5,7 @@ import torch
 import pandas as pd 
 import numpy as np 
 from sklearn.cluster import KMeans
+import networkx as nx
 
 from .utils import MyBar, colorizar
 
@@ -39,8 +40,12 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
       method_distance: Distance function to use in the method: ['euclidea', 'cosine']
 
       max_module: maximun nodes to use per module using infomap algorithm ('i-graph')
+
+      umbral: float or 2-tuple (humor threshold, not humor threshold)
+        If i-graph is selected, this represents a percent of the minor edges to use; if
+        c-graph is selected, and an endge has a weight higer of this, this edge is descarted
     '''
-    Me = ['k-means', 'i-graph']
+    Me = ['k-means', 'i-graph', 'c-graph']
     Me_d = ['euclidea', 'cosine']
     if method not in Me:
         print('ERROR::parameter method not in', '['+', '.join(Me)+'].')
@@ -57,6 +62,8 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
 
     pos_c, neg_c = [], []
     if method == 'k-means':
+        if type(umbral) is not float:
+            umbral = umbral[0]
         # finding the centers
         print ('# Calculating the centers')
         pos = pos.to_numpy().tolist()
@@ -95,10 +102,12 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
         del neg 
         del mv
     elif method == 'i-graph':
+        if type(umbral) is not float:
+            umbral = umbral[0]
         if not os.path.isdir(INFOMAP_PATH):
             print ('ERROR::path the path', INFOMAP_PATH, 'does not exist!, This function will be skiped')
             return
-        print ('Making graphs, the umbral will be calculated with a {:.3}% of the edges'.format(umbral*100))
+        print ('Making graphs, the threshold will be calculated with a {:.3}% of the edges'.format(umbral*100))
         bar = MyBar('i-graph', max=len(pos)+len(neg))
         
         pos_name = os.path.join('data', 'pos_graf_'+method_distance)
@@ -210,9 +219,108 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
                 elif mod == neg_modules and neg_i < max_module:
                     neg_i += 1
                     neg_c.append(neg[ int(lines.split()[-1]) ].tolist())
-    # elif method == 'c-graph':
+    elif method == 'c-graph':
+        neg_umbral = umbral
+        if type(umbral) is not float:
+            neg_umbral = umbral[1]
+            umbral = umbral[0]
 
+        print ('Making graphs with (positive: {:.6}, negative: {:.6}) threshold'.format(umbral, neg_umbral), 'and compact algorithm')
+        bar = MyBar('c-graph', max=len(pos)+len(neg))
+        
+        pos = pos.to_numpy().tolist()
+        pos = np.array([i for i in map(lambda x: [float(v) for v in x[0].split()], pos)], dtype=np.float32)
+        G = nx.Graph()
 
+        for i in range(pos.shape[0]):
+            tmp_v = pos[i].reshape(1, -1)
+            if method_distance == 'euclidea':
+                tmp_v = np.sqrt(((pos - tmp_v)**2).sum(axis=-1))
+            elif method_distance == 'cosine':
+                n1 = np.sqrt((tmp_v**2).sum(axis=-1))
+                n2 = np.sqrt((pos**2).sum(axis=-1))
+                tmp_v = (tmp_v*pos).sum(axis=-1)
+                tmp_v = tmp_v/(n1*n2 + eps)
+            tmp_v  = tmp_v.reshape(-1)
+            ar_pos = -1
+            for j in range(tmp_v.shape[0]):
+                if j == i or tmp_v[j] > umbral:
+                    continue
+                if ar_pos < 0:
+                    ar_pos = j
+                elif tmp_v[j] < tmp_v[ar_pos]:
+                    ar_pos = j
+            if ar_pos >= 0:
+                G.add_edge(i,j, weight=tmp_v[j])
+            bar.next()
+
+        accum, max_len_module = 0, 1
+        for c in nx.connected_components(G):
+            my_node, ac = [], 0
+            for n in c:
+                ac += 1
+                valor, s = 0, 0
+                for _, _, d in G.edges(n, data=True):
+                    valor += d['weight']
+                    s += 1
+                valor /= s if s > 0 else 1
+                my_node.append((valor, n))
+            accum += 1 if ac <= max_len_module else 0
+            my_node.sort(reverse=True)
+            my_node = my_node[:-min(max_module, len(my_node))]
+            for _, i in my_node:
+                pos_c.append(pos[i].tolist())
+        del G 
+        del pos
+        
+        neg = neg.to_numpy().tolist()
+        neg = np.array([i for i in map(lambda x: [float(v) for v in x[0].split()], neg)], dtype=np.float32)
+        G = nx.Graph()
+
+        for i in range(neg.shape[0]):
+            tmp_v = neg[i].reshape(1, -1)
+            if method_distance == 'euclidea':
+                tmp_v = np.sqrt(((neg - tmp_v)**2).sum(axis=-1))
+            elif method_distance == 'cosine':
+                n1 = np.sqrt((tmp_v**2).sum(axis=-1))
+                n2 = np.sqrt((neg**2).sum(axis=-1))
+                tmp_v = (tmp_v*neg).sum(axis=-1)
+                tmp_v = tmp_v/(n1*n2 + eps)
+            tmp_v  = tmp_v.reshape(-1)
+            ar_neg = -1
+            for j in range(tmp_v.shape[0]):
+                if j == i or tmp_v[j] > neg_umbral:
+                    continue
+                if ar_neg < 0:
+                    ar_neg = j
+                elif tmp_v[j] < tmp_v[ar_neg]:
+                    ar_neg = j
+            if ar_neg >= 0:
+                G.add_edge(i,j, weight=tmp_v[j])
+            bar.next()
+
+        for c in nx.connected_components(G):
+            my_node, ac = [], 0
+            for n in c:
+                ac += 1
+                valor, s = 0, 0
+                for _, _, d in G.edges(n, data=True):
+                    valor += d['weight']
+                    s += 1
+                valor /= s if s > 0 else 1
+                my_node.append((valor, n))
+            accum += 1 if ac <= max_len_module else 0
+            my_node.sort(reverse=True)
+            my_node = my_node[:-min(max_module, len(my_node))]
+            for _, i in my_node:
+                neg_c.append(neg[i].tolist())
+        del G 
+        del neg        
+        bar.finish()
+
+    print ('Total of components less than {}: {}'.format(max_len_module, accum))
+    print ('Total of positive centers:', len(pos_c))
+    print ('Total of negative centers:', len(neg_c))
     with open(os.path.join('data', 'pos_center.txt'), 'w') as file:
         for l in pos_c:
             file.write(' '.join([str(v) for v in l]) + '\n')
@@ -255,6 +363,31 @@ def _findMyCloser(datu, vector, N, distance='euclidea', eps=1e-7):
     dt_ = [v[0] for v in dt_]
     return dt_
 
+def _pikMeRandom(arr, K):
+    pos:int = 0
+    for i in range(K): 
+        pos = random.randint(pos, len(arr)-K+i)
+        yield arr[ pos ]
+
+def _pikMeCloser(arr, vec, K, distance='euclidea', eps=1e-7):
+    if distance not in ['euclidea', 'cosine']:
+        print ('ERROR::DiSTANCE', distance, 'not in', ' '.join(['euclidea', 'cosine']))
+        return
+    vec  = np.array([float(v) for v in vec.split()]).reshape(1,-1)
+    vecs = np.array([[float(v) for v in x.split()] for x in arr])
+
+    if distance == 'euclidea':
+        vecs = np.sqrt(((vecs - vec)**2).sum(axis=-1))
+    elif distance == 'cosine':
+        vecs = (vec*vecs).sum(axis=-1) / ( np.sqrt((vec*vec).sum()) * np.sqrt((vecs*vecs).sum(axis=-1)) + eps)
+    
+    vecs = [(vecs[i], i) for i in range(vecs.shape[0])]
+    vecs.sort()
+    vecs = vecs[:K]
+    vecs = [arr[i] for _,i in vecs]
+    return vecs
+    
+
 def makeSiamData(data_path:str, K, M, ref_folder='data', humor_label='is_humor', distance='euclidea'):
     data = pd.read_csv(data_path)
     pos  = data.query(humor_label+' == 1').drop([humor_label, 'id', 'humor_rating'], axis=1)
@@ -274,21 +407,23 @@ def makeSiamData(data_path:str, K, M, ref_folder='data', humor_label='is_humor',
         with open('data/pos_center.txt', 'r') as file:
             for line in file.readlines():
                 pos_centers.append(line.replace('\n', ''))
-    pos_centers = pos_centers[:min(K, len(pos_centers))]
-    neg_centers = neg_centers[:min(K, len(neg_centers))]
+    # pos_centers = pos_centers[:min(K, len(pos_centers))]
+    # neg_centers = neg_centers[:min(K, len(neg_centers))]
     
     print ('# Making Siam data from', colorizar(os.path.basename(data_path)))
     bar = MyBar('data', max=len(data))
     for i in range(len(data)):
         dt, da, lab = None, None, None
         if int(data.loc[i, humor_label]) == 0:
+            dt = list(_pikMeRandom(neg_centers, K))
+            da = _pikMeCloser(pos_centers, data.loc[i, 'vecs'], M, distance=distance)
             # dt = _findMyRandom(neg, K)
-            dt = neg_centers
-            da = _findMyCloser(pos, data.loc[i, 'vecs'], M, distance=distance)
+            # da = _findMyCloser(pos, data.loc[i, 'vecs'], M, distance=distance)
         else:
+            dt = list(_pikMeRandom(pos_centers, K))
+            da = _pikMeCloser(neg_centers, data.loc[i, 'vecs'], M, distance=distance)
             # dt = _findMyRandom(pos, K)
-            dt = pos_centers
-            da = _findMyCloser(neg, data.loc[i, 'vecs'], M, distance=distance)
+            # da = _findMyCloser(neg, data.loc[i, 'vecs'], M, distance=distance)
 
         for v in dt:
             new_data.append(v)

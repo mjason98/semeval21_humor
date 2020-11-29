@@ -24,7 +24,7 @@ EPOCHS = 12
 LR 	   = 3e-5
 ONLINE_TR = True
 HSIZE    = 800
-PRED_BATCH = 16
+PRED_BATCH = 1
 BERT_OPTIM = 'rms' # ['adam' or 'rms']
 
 SEQUENCE_LENGTH = 120
@@ -34,7 +34,7 @@ SIAM_SIZE    = 32
 SIAM_DROPOUT = 0.0
 SIAM_LR      = 0.001
 SIAM_EPOCH   = 100
-K,M          = 4, 8
+K,M          = 3, 7
 
 def check_params(arg=None):
 	global BATCH
@@ -164,14 +164,14 @@ def prep_Siam():
 	# DATA_PATH      = 'data/train_en.csv'
 	# EVAL_DATA_PATH = 'data/dev_en.csv'
 
-	findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral=0.1, max_module=10)
-	projectData2D(DATA_PATH, save_name='2DataIMultiSelect', use_centers=True)
-	
+	findCenter_and_Limits(DATA_PATH, K,M, method='c-graph', method_distance='euclidea', umbral=(0.0013, 0.004), max_module=1)
+	projectData2D(DATA_PATH, save_name='2DataCMar', use_centers=True)
+
 	dts = makeSiamData(DATA_PATH, K, M, ref_folder='data', distance='euclidea')
 	des = makeSiamData(EVAL_DATA_PATH, K, M, ref_folder='data', distance='euclidea')
 	# dts = 'data/Siamtrain_en.csv'
 	# des = 'data/Siamdev_en.csv'
-	
+
 	t_data, t_loader = makeDataSet_Siam(dts, batch=SIAM_BATCH)
 	e_data, e_loader = makeDataSet_Siam(des, batch=SIAM_BATCH)
 
