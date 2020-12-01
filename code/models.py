@@ -142,7 +142,7 @@ class RawDataset(Dataset):
 		
 		try:
 			value = self.data_frame.loc[idx, 'is_humor']
-			regv  = self.data_frame.loc[idx, 'humor_rating']
+			regv  = self.data_frame.loc[idx, 'humor_rating'] if int(value) != 0 else 0.
 		except:
 			value, regv = 0, 0.
 
@@ -248,12 +248,13 @@ def makePredictData(csv_path:str, batch):
 class Encod_Model(nn.Module):
 	def __init__(self, hidden_size, vec_size, dropout=0.2):
 		super(Encod_Model, self).__init__()
+		self.mid_size = 64
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
-		                              nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
-									  nn.Linear(hidden_size//2, 64), nn.LeakyReLU())
-		self.Task1   = nn.Linear(64, 2)
-		self.Task2   = nn.Linear(64, 1)
-		
+									  nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
+									  nn.Linear(hidden_size//2, self.mid_size), nn.LeakyReLU())
+		self.Task1   = nn.Linear(self.mid_size, 2)
+		self.Task2   = nn.Sequential(nn.Linear(self.mid_size, self.mid_size//2), 
+									 nn.LeakyReLU(), nn.Linear(self.mid_size//2, 1), nn.ReLU())
 	def forward(self, X, ret_vec=False):
 		y_hat = self.Dense1(X)
 		if ret_vec:
@@ -262,7 +263,6 @@ class Encod_Model(nn.Module):
 		y2 = self.Task2(y_hat).squeeze()
 		return y1, y2
 
-
 	def load(self, path):
 		self.load_state_dict(torch.load(path))
 
@@ -270,19 +270,19 @@ class Encod_Model(nn.Module):
 		torch.save(self.state_dict(), path) 
 
 class ContrastiveLoss(torch.nn.Module):
-    """
-    Contrastive loss function.
-    Based on: http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
-    """
-    def __init__(self, margin=2.0):
-        super(ContrastiveLoss, self).__init__()
-        self.margin = margin
+	"""
+	Contrastive loss function.
+	Based on: http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
+	"""
+	def __init__(self, margin=2.0):
+		super(ContrastiveLoss, self).__init__()
+		self.margin = margin
 
 	# ver lo del contrastive con lo del label
-    def forward(self, D, label):
-        loss_contrastive = torch.mean((1-label) * torch.pow(D, 2) +
-                                      (label) * torch.pow(torch.clamp(self.margin - D, min=0.0), 2))
-        return loss_contrastive
+	def forward(self, D, label):
+		loss_contrastive = torch.mean((1-label) * torch.pow(D, 2) +
+									  (label) * torch.pow(torch.clamp(self.margin - D, min=0.0), 2))
+		return loss_contrastive
 
 class Siam_Model(nn.Module):
 	def __init__(self, hidden_size, vec_size, dropout=0.2):
@@ -291,7 +291,7 @@ class Siam_Model(nn.Module):
 		self.criterion1 = ContrastiveLoss(1.0)
 
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
-		                              nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
+									  nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
 									  nn.Linear(hidden_size//2, hidden_size//4))
 		# self.Task1   = nn.Linear(hidden_size//4, 2)
 		self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
@@ -333,10 +333,21 @@ class Z_Model(nn.Module):
 	def save(self, path):
 		torch.save(self.state_dict(), path) 
 
+class MaskedMSELoss(torch.nn.Module):
+	def __init__(self):
+		super(MaskedMSELoss, self).__init__()
+		self.mse = nn.MSELoss(reduction='none')
+
+	def forward(self, y_hat, y, label):
+		y_loss = self.mse(y_hat, y).reshape(-1)
+		y_mask = label.reshape(-1)
+		return (y_loss*y_mask).mean()
+
 class Bencoder_Model(nn.Module):
 	def __init__(self, hidden_size, vec_size=768, dropout=0.2, max_length=120):
 		super(Bencoder_Model, self).__init__()
 		self.criterion1 = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
+		self.criterion2 = MaskedMSELoss()
 		# self.criterion2 = nn.CrossEntropyLoss(reduction='none')#weight=torch.Tensor([0.7,0.3]))
 
 		self.max_length = max_length
@@ -397,6 +408,8 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, na
 	board = TorchBoard()
 	if b_fun is not None:
 		board.setFunct(b_fun)
+	
+	etha = 0.8
 	for e in range(epochs):
 		bar = MyBar('Epoch '+str(e+1)+' '*(int(math.log10(epochs)+1) - int(math.log10(e+1)+1)) , 
 					max=len(Data_loader)+(len(evalData_loader if evalData_loader is not None else 0)))
@@ -407,9 +420,12 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, na
 			# Multi-Task learning
 			y_hat, y_val = model(data['x'])
 			y1 = data['y'].to(device=model.device)
-			y2 = data['v'].to(device=model.device)
+			y2 = data['v'].float().to(device=model.device)
 
-			loss = model.criterion1(y_hat, y1)
+			l1 = model.criterion1(y_hat, y1)
+			l2 = model.criterion2(y_val, y2, y1)
+			
+			loss = etha*l1 + (1. - etha)*l2
 			loss.backward()
 			optim.step()
 
@@ -455,14 +471,14 @@ def evaluateModels(model, testData_loader, header=('id', 'is_humor', 'humor_rati
 			y_hat, y_val = y_hat.to(device=cpu0), y_val.to(device=cpu0)
 			
 			y_hat = y_hat.argmax(dim=-1).squeeze()
-			y_val = y_val.squeeze()
+			y_val = y_val.squeeze() * y_hat
 			ids = data['id'].squeeze()
 			
-			bar.next()
 			for i in range(ids.shape[0]):
 				Ids.append(ids[i].item())
 				lab.append(y_hat[i].item())
 				val.append(y_val[i].item())
+			bar.next()
 	bar.finish()
 	
 	Ids, lab, val = pd.Series(Ids), pd.Series(lab), pd.Series(val)

@@ -105,7 +105,7 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
         if type(umbral) is not float:
             umbral = umbral[0]
         if not os.path.isdir(INFOMAP_PATH):
-            print ('ERROR::path the path', INFOMAP_PATH, 'does not exist!, This function will be skiped')
+            print ('ERROR::PATH the path', INFOMAP_PATH, 'does not exist!, This function will be skiped')
             return
         print ('Making graphs, the threshold will be calculated with a {:.3}% of the edges'.format(umbral*100))
         bar = MyBar('i-graph', max=len(pos)+len(neg))
@@ -114,78 +114,79 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
         pos = pos.to_numpy().tolist()
         pos = np.array([i for i in map(lambda x: [float(v) for v in x[0].split()], pos)], dtype=np.float32)
         pos_min, pos_max, pos_umb = None, None, None
-        pos_edge = []
         
-        for i in range(pos.shape[0]):
-            tmp_v = pos[i].reshape(1, -1)
-            if method_distance == 'euclidea':
-                tmp_v = np.sqrt(((pos - tmp_v)**2).sum(axis=-1))
-            elif method_distance == 'cosine':
-                n1 = np.sqrt((tmp_v**2).sum(axis=-1))
-                n2 = np.sqrt((pos**2).sum(axis=-1))
-                tmp_v = (tmp_v*pos).sum(axis=-1)
-                tmp_v = tmp_v/(n1*n2 + eps)
-            tmp_v = tmp_v.reshape(-1)
-            for j in range(tmp_v.shape[0]):
-                if j == i:
-                    continue
-                pos_edge.append((i+1, j+1, tmp_v[j]))
-                if pos_min is None:
-                    pos_min = tmp_v[j]
-                else:
-                    pos_min = min(pos_min, tmp_v[j])
-                if pos_max is None:
-                    pos_max = tmp_v[j]
-                else:
-                    pos_max = max(pos_max, tmp_v[j])
-            bar.next()
+        with open(pos_name+'t', 'w') as file:
+            for i in range(pos.shape[0]):
+                tmp_v = pos[i].reshape(1, -1)
+                if method_distance == 'euclidea':
+                    tmp_v = np.sqrt(((pos - tmp_v)**2).sum(axis=-1))
+                elif method_distance == 'cosine':
+                    n1 = np.sqrt((tmp_v**2).sum(axis=-1))
+                    n2 = np.sqrt((pos**2).sum(axis=-1))
+                    tmp_v = (tmp_v*pos).sum(axis=-1)
+                    tmp_v = tmp_v/(n1*n2 + eps)
+                tmp_v = tmp_v.reshape(-1)
+                for j in range(tmp_v.shape[0]):
+                    if j == i:
+                        continue
+                    file.write(' '.join([str(i+1), str(j+1), str(tmp_v[j])])+'\n')
+                    if pos_min is None:
+                        pos_min = tmp_v[j]
+                    else:
+                        pos_min = min(pos_min, tmp_v[j])
+                    if pos_max is None:
+                        pos_max = tmp_v[j]
+                    else:
+                        pos_max = max(pos_max, tmp_v[j])
+                bar.next()
         pos_umb = (1 - umbral)*pos_min + umbral*pos_max
-        
-        with open(pos_name, 'w') as file:
-            for i,j,v in pos_edge:
-                if v < pos_umb:
-                    file.write(str(i) + ' ' + str(j) + ' ' + str(v) + '\n')
-        del pos_edge
+
 
         neg_name = os.path.join('data', 'neg_graf_'+method_distance)
         neg = neg.to_numpy().tolist()
         neg = np.array([i for i in map(lambda x: [float(v) for v in x[0].split()], neg)], dtype=np.float32)
         neg_min, neg_max, neg_umb = None, None, None
-        neg_edge = []
-
-        for i in range(neg.shape[0]):
-            tmp_v = neg[i].reshape(1, -1)
-            if method_distance == 'euclidea':
-                tmp_v = np.sqrt(((neg - tmp_v)**2).sum(axis=-1))
-            elif method_distance == 'cosine':
-                n1 = np.sqrt((tmp_v**2).sum(axis=-1))
-                n2 = np.sqrt((neg**2).sum(axis=-1))
-                tmp_v = (tmp_v*neg).sum(axis=-1)
-                tmp_v = tmp_v/(n1*n2 + eps)
-            tmp_v = tmp_v.reshape(-1)
-            for j in range(tmp_v.shape[0]):
-                if j == i:
-                    continue
-                neg_edge.append((i+1, j+1, tmp_v[j]))
-                if neg_min is None:
-                    neg_min = tmp_v[j]
-                else:
-                    neg_min = min(neg_min, tmp_v[j])
-                if neg_max is None:
-                    neg_max = tmp_v[j]
-                else:
-                    neg_max = max(neg_max, tmp_v[j])
-            bar.next()
+        
+        with open(neg_name+'t', 'w') as file:
+            for i in range(neg.shape[0]):
+                tmp_v = neg[i].reshape(1, -1)
+                if method_distance == 'euclidea':
+                    tmp_v = np.sqrt(((neg - tmp_v)**2).sum(axis=-1))
+                elif method_distance == 'cosine':
+                    n1 = np.sqrt((tmp_v**2).sum(axis=-1))
+                    n2 = np.sqrt((neg**2).sum(axis=-1))
+                    tmp_v = (tmp_v*neg).sum(axis=-1)
+                    tmp_v = tmp_v/(n1*n2 + eps)
+                tmp_v = tmp_v.reshape(-1)
+                for j in range(tmp_v.shape[0]):
+                    if j == i:
+                        continue
+                    file.write(' '.join([str(i+1), str(j+1), str(tmp_v[j])])+'\n')
+                    if neg_min is None:
+                        neg_min = tmp_v[j]
+                    else:
+                        neg_min = min(neg_min, tmp_v[j])
+                    if neg_max is None:
+                        neg_max = tmp_v[j]
+                    else:
+                        neg_max = max(neg_max, tmp_v[j])
+                bar.next()
         neg_umb = (1 - umbral)*neg_min + umbral*neg_max
         del neg_max
         del neg_min
-
-        with open(neg_name, 'w') as file:
-            for i,j,v in neg_edge:
-                if v < neg_umb:
-                    file.write(str(i) + ' ' + str(j) + ' ' + str(v) + '\n')
-        del neg_edge
         bar.finish()
+
+        print ('Filtering using thresholds positive: {:.3}, negative: {:.3}'.format(pos_umb, neg_umb))
+        with open(neg_name+'t', 'r') as R, open(neg_name, 'w') as W:
+            for line in R:
+                v = float(line.replace('\n', '').split()[-1])
+                if v < neg_umb:
+                    W.write(line)
+        with open(pos_name+'t', 'r') as R, open(pos_name, 'w') as W:
+            for line in R:
+                v = float(line.replace('\n', '').split()[-1])
+                if v < pos_umb:
+                    W.write(line)
 
         INFOMAP = os.path.join(INFOMAP_PATH, INFOMAP_EX)
         os.system(' '.join([INFOMAP, pos_name, os.path.abspath('data'), '--silent']))
@@ -219,6 +220,13 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
                 elif mod == neg_modules and neg_i < max_module:
                     neg_i += 1
                     neg_c.append(neg[ int(lines.split()[-1]) ].tolist())
+        
+        os.remove(os.path.join('data', os.path.basename(pos_name)+'.tree'))
+        os.remove(os.path.join('data', os.path.basename(neg_name)+'.tree'))
+        os.remove(os.path.join('data', os.path.basename(pos_name)))
+        os.remove(os.path.join('data', os.path.basename(neg_name)))
+        os.remove(os.path.join('data', os.path.basename(pos_name+'t')))
+        os.remove(os.path.join('data', os.path.basename(neg_name+'t')))
     elif method == 'c-graph':
         neg_umbral = umbral
         if type(umbral) is not float:
@@ -317,8 +325,8 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
         del G 
         del neg        
         bar.finish()
+        print ('Total of components less than {}: {}'.format(max_len_module, accum))
 
-    print ('Total of components less than {}: {}'.format(max_len_module, accum))
     print ('Total of positive centers:', len(pos_c))
     print ('Total of negative centers:', len(neg_c))
     with open(os.path.join('data', 'pos_center.txt'), 'w') as file:

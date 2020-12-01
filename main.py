@@ -3,6 +3,7 @@ import sys
 import torch
 import argparse
 import numpy as np
+import random
 
 from code.models import makeTrain_and_ValData
 from code.models import offline, load_transformers, delete_transformers
@@ -33,7 +34,7 @@ SIAM_BATCH   = 64
 SIAM_SIZE    = 32
 SIAM_DROPOUT = 0.0
 SIAM_LR      = 0.001
-SIAM_EPOCH   = 100
+SIAM_EPOCH   = 50
 K,M          = 3, 7
 
 def check_params(arg=None):
@@ -98,6 +99,7 @@ def check_params(arg=None):
 	
 	torch.manual_seed(12345)
 	np.random.seed(12345)
+	random.seed(12345)
 	
 	if not ONLINE_TR:
 		offline(True)
@@ -134,7 +136,7 @@ def TrainRawEncoder():
 
 	model = makeModels('bencoder', HSIZE, dpr=0.0)
 	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader,
-				nameu='roberta', optim=model.makeOptimizer(lr=LR))
+				nameu='roberta', optim=model.makeOptimizer(lr=LR, algorithm=BERT_OPTIM))
 
 	del t_loader
 	del e_loader
@@ -147,7 +149,8 @@ def TrainRawEncoder():
 	t_data, t_loader = makeDataSet_Raw(DATA_PATH, batch=BATCH, shuffle=False)
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH, shuffle=False)
 
-	evaluateModels(model, loader, cleaner=['humor_rating'], name='pred_en')
+	# Make predictions using only the encoder
+	evaluateModels(model, loader, name='pred_en')
 	# Convert the data into vectors
 	DATA_PATH      = convert2EncoderVec('train_en', model, t_loader, save_as_numpy=True)
 	EVAL_DATA_PATH = convert2EncoderVec('dev_en', model, e_loader, save_as_numpy=True)
@@ -161,11 +164,14 @@ def TrainRawEncoder():
 	del data 
 
 def prep_Siam():
-	# DATA_PATH      = 'data/train_en.csv'
-	# EVAL_DATA_PATH = 'data/dev_en.csv'
+	DATA_PATH      = 'data/train_en.csv'
+	EVAL_DATA_PATH = 'data/dev_en.csv'
 
-	findCenter_and_Limits(DATA_PATH, K,M, method='c-graph', method_distance='euclidea', umbral=(0.0013, 0.004), max_module=1)
-	projectData2D(DATA_PATH, save_name='2DataCMar', use_centers=True)
+	# findCenter_and_Limits(DATA_PATH, K,M, method='c-graph', method_distance='euclidea', umbral=(0.0013, 0.004), max_module=1)
+	findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral= 0.004, max_module=1) #0.004 # 10
+	projectData2D(DATA_PATH, save_name='2DataIMar', use_centers=True)
+
+	# return 
 
 	dts = makeSiamData(DATA_PATH, K, M, ref_folder='data', distance='euclidea')
 	des = makeSiamData(EVAL_DATA_PATH, K, M, ref_folder='data', distance='euclidea')
@@ -186,9 +192,9 @@ def pred_with_Siam():
 	global K
 	global M 
 
-	# TEST_DATA_PATH = 'data/test_en.csv'
-	# EVAL_DATA_PATH = 'data/dev_en.csv'
-	# DATA_PATH = 'data/train_en.csv'
+	TEST_DATA_PATH = 'data/test_en.csv'
+	EVAL_DATA_PATH = 'data/dev_en.csv'
+	DATA_PATH = 'data/train_en.csv'
 
 	model = makeModels('siam', SIAM_SIZE, dpr=SIAM_DROPOUT, in_size=64)
 	model.load(os.path.join('pts', 'siames.pt'))
@@ -208,8 +214,8 @@ if __name__ == '__main__':
 	DATA_PATH, EVAL_DATA_PATH = makeTrain_and_ValData(DATA_PATH, percent=10)
 
 	TrainRawEncoder()
-	prep_Siam()
-	pred_with_Siam()
+	# prep_Siam()
+	# pred_with_Siam()
 	
 	# makeFinalData_Model()
 
