@@ -21,11 +21,12 @@ TEST_DATA_PATH  = 'data/public_dev.csv'
 #==============================================
 
 BATCH  = 64
-EPOCHS = 12
+EPOCHS = 20
 LR 	   = 3e-5
 ONLINE_TR = True
 HSIZE    = 800
 PRED_BATCH = 1
+MTL_ETHA  = 0.6
 BERT_OPTIM = 'rms' # ['adam' or 'rms']
 
 SEQUENCE_LENGTH = 120
@@ -46,6 +47,7 @@ def check_params(arg=None):
 	global EVAL_DATA_PATH
 	global ONLINE_TR
 	global BERT_OPTIM
+	global MTL_ETHA
 
 	INFOMAP_PATH = '/DATA/work_space/2-AI/3-SemEval21/infomap-master'
 	INFOMAP_EX   = 'Infomap'
@@ -71,9 +73,12 @@ def check_params(arg=None):
 					   required=False, default=BERT_OPTIM, choices=['adam', 'rms'])
 	parse.add_argument('--offline', help='Use a local transformer, default False', 
 					   required=False, action='store_false', default=True)
+	parse.add_argument('--etha', dest='etha', help='The multi task learning parameter to calculate the liner convex combination: \math\{loss = \ethaL_1 + (1 - \etha)L_2\}', 
+					   required=False, default=MTL_ETHA)					   
    
 	returns = parse.parse_args(arg)
 
+	MTL_ETHA = returns.etha
 	LR    = float(returns.learning_rate)
 	BATCH = int(returns.batchs)
 	EPOCHS = int(returns.epochs)
@@ -84,9 +89,9 @@ def check_params(arg=None):
 	BERT_OPTIM = returns.optim
 	
 	# Set Infomap staf
-	setInfomapData(INFOMAP_PATH, INFOMAP_EX)
 	INFOMAP_EX = returns.iname 
 	INFOMAP_PATH = returns.ipath
+	setInfomapData(INFOMAP_PATH, INFOMAP_EX)
 
 	if not os.path.isdir('data'):
 		os.mkdir('data')
@@ -135,7 +140,7 @@ def TrainRawEncoder():
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH)
 
 	model = makeModels('bencoder', HSIZE, dpr=0.0)
-	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader,
+	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader, etha=MTL_ETHA,
 				nameu='roberta', optim=model.makeOptimizer(lr=LR, algorithm=BERT_OPTIM))
 
 	del t_loader

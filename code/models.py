@@ -254,7 +254,7 @@ class Encod_Model(nn.Module):
 									  nn.Linear(hidden_size//2, self.mid_size), nn.LeakyReLU())
 		self.Task1   = nn.Linear(self.mid_size, 2)
 		self.Task2   = nn.Sequential(nn.Linear(self.mid_size, self.mid_size//2), 
-									 nn.LeakyReLU(), nn.Linear(self.mid_size//2, 1), nn.ReLU())
+									 nn.ReLU(), nn.Linear(self.mid_size//2, 1), nn.ReLU())
 	def forward(self, X, ret_vec=False):
 		y_hat = self.Dense1(X)
 		if ret_vec:
@@ -398,7 +398,7 @@ def makeModels(name:str, size, in_size=768, dpr=0.2):
 	else:
 		print ('ERROR::NAME', name, 'not founded!!')
 
-def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, nameu='encoder', optim=None, b_fun=None, smood=False):
+def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, etha=1., nameu='encoder', optim=None, b_fun=None, smood=False):
 	if epochs <= 0:
 		return
 	if optim is None:
@@ -409,7 +409,6 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, na
 	if b_fun is not None:
 		board.setFunct(b_fun)
 	
-	etha = 0.8
 	for e in range(epochs):
 		bar = MyBar('Epoch '+str(e+1)+' '*(int(math.log10(epochs)+1) - int(math.log10(e+1)+1)) , 
 					max=len(Data_loader)+(len(evalData_loader if evalData_loader is not None else 0)))
