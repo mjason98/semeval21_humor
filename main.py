@@ -78,7 +78,7 @@ def check_params(arg=None):
    
 	returns = parse.parse_args(arg)
 
-	MTL_ETHA = returns.etha
+	MTL_ETHA = float(returns.etha)
 	LR    = float(returns.learning_rate)
 	BATCH = int(returns.batchs)
 	EPOCHS = int(returns.epochs)
