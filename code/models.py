@@ -370,13 +370,16 @@ class Bencoder_Model(nn.Module):
 	def save(self, path):
 		torch.save(self.state_dict(), path) 
 	
-	def makeOptimizer(self, lr=3e-5, decay=2e-5, ml=9/10, algorithm='adam'):
+	def makeOptimizer(self, lr=5e-5, decay=2e-5, algorithm='adam', lr_fin=3e-5):
 		pars = [{'params':self.encoder.parameters()}]
-		lr_t = lr
+		mtl, lamda = 1. / len(self.bert.encoder.layer), 0
+		
 		for l in self.bert.encoder.layer:
+			lr_t = (1. - lamda)*lr + lamda*lr_fin
 			D = {'params':l.parameters(), 'lr':lr_t}
 			pars.append(D)
-			lr_t *= ml
+			lamda += mtl 
+		lr_t = (1. - lamda)*lr + lamda*lr_fin
 		D = {'params':self.bert.pooler.parameters(), 'lr':lr_t}
 		pars.append(D)
 
@@ -398,7 +401,7 @@ def makeModels(name:str, size, in_size=768, dpr=0.2):
 	else:
 		print ('ERROR::NAME', name, 'not founded!!')
 
-def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, etha=1., nameu='encoder', optim=None, b_fun=None, smood=False):
+def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, etha=1., nameu='encoder', optim=None, b_fun=None, smood=False, mtl=True):
 	if epochs <= 0:
 		return
 	if optim is None:
@@ -420,11 +423,14 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, et
 			y_hat, y_val = model(data['x'])
 			y1 = data['y'].to(device=model.device)
 			y2 = data['v'].float().to(device=model.device)
-
-			l1 = model.criterion1(y_hat, y1)
-			l2 = model.criterion2(y_val, y2, y1)
 			
-			loss = etha*l1 + (1. - etha)*l2
+			if mtl:
+				l1 = model.criterion1(y_hat, y1)
+				l2 = model.criterion2(y_val, y2, y1)
+				loss = etha*l1 + (1. - etha)*l2
+			else:
+				loss = model.criterion1(y_hat, y1)
+			
 			loss.backward()
 			optim.step()
 

@@ -22,7 +22,7 @@ TEST_DATA_PATH  = 'data/public_dev.csv'
 
 BATCH  = 64
 EPOCHS = 20
-LR 	   = 3e-5
+LR 	   = 5e-5
 ONLINE_TR = True
 HSIZE    = 800
 PRED_BATCH = 1
@@ -53,7 +53,7 @@ def check_params(arg=None):
 	INFOMAP_EX   = 'Infomap'
 
 	parse = argparse.ArgumentParser(description='SemEval2021 Humor')
-	parse.add_argument('-l', dest='learning_rate', help='The learning rate to use in the optimizer', 
+	parse.add_argument('-l1', dest='learning_rate', help='The learning rate to use in the optimizer', 
 					   required=False, default=LR)
 	parse.add_argument('-b', dest='batchs', help='Amount of batchs', 
 					   required=False, default=BATCH)
@@ -140,9 +140,8 @@ def TrainRawEncoder():
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH)
 
 	model = makeModels('bencoder', HSIZE, dpr=0.0)
-	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader, etha=MTL_ETHA,
+	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader, etha=MTL_ETHA, mtl = False if MTL_ETHA >= 0.99 else True,
 				nameu='roberta', optim=model.makeOptimizer(lr=LR, algorithm=BERT_OPTIM))
-
 	del t_loader
 	del e_loader
 	del t_data
@@ -174,7 +173,7 @@ def prep_Siam():
 
 	# findCenter_and_Limits(DATA_PATH, K,M, method='c-graph', method_distance='euclidea', umbral=(0.0013, 0.004), max_module=1)
 	findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral= 0.004, max_module=1) #0.004 # 10
-	projectData2D(DATA_PATH, save_name='2DataIMar', use_centers=True)
+	projectData2D(DATA_PATH, save_name='2DataIMar2', use_centers=True)
 
 	# return 
 
@@ -188,7 +187,7 @@ def prep_Siam():
 
 	model = makeModels('siam', SIAM_SIZE, dpr=SIAM_DROPOUT, in_size=64)
 	trainModels(model, t_loader, epochs=SIAM_EPOCH, evalData_loader=e_loader,
-				lr=SIAM_LR, nameu='siames', b_fun=min, smood=True)
+				lr=SIAM_LR, nameu='siames', b_fun=min, smood=True, mtl=False)
 
 def pred_with_Siam():
 	global TEST_DATA_PATH
