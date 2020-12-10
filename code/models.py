@@ -263,7 +263,7 @@ class POS(torch.nn.Module):
 class Encod_Model(nn.Module):
 	def __init__(self, hidden_size, vec_size, dropout=0.2):
 		super(Encod_Model, self).__init__()
-		self.mid_size = 64
+		self.mid_size = 32
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
 									  nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
 									  nn.Linear(hidden_size//2, self.mid_size), nn.LeakyReLU())

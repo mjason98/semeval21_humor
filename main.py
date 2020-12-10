@@ -60,9 +60,9 @@ def check_params(arg=None):
 					   required=False, default=LR)
 	parse.add_argument('-s', dest='encod_size', help='The size of the dense layer in the encoder', 
 					   required=False, default=HSIZE)
-	parse.add_argument('-b', dest='batchs', help='Amount of batchs', 
+	parse.add_argument('-b', dest='batchs', help='Number of batchs', 
 					   required=False, default=BATCH)
-	parse.add_argument('-e', dest='epochs', help='Amount of epochs', 
+	parse.add_argument('-e', dest='epochs', help='Number of epochs', 
 					   required=False, default=EPOCHS)
 	parse.add_argument('-p', dest='predict', help='Unlabeled Data', 
 					   required=False, default=TEST_DATA_PATH)
