@@ -76,13 +76,6 @@ def delete_transformers():
 	del TOKENIZER_PRE
 	del TRANS_MODEL
 
-def max_pool_op(X):
-	seq_len = X.shape[1]
-	x_hat = X.permute((0,2,1))
-	x_hat = F.max_pool1d(x_hat,seq_len, stride=1)
-	x_hat = x_hat.permute((0,2,1))
-	return x_hat.squeeze()
-
 def make_BertRep_from_data(data_path:str, drops:list = ['humor_controversy', 'offense_rating'], 
 						   text_field='text', max_length=30, my_batch=32, header_out=('y_c', 'y_v', 'x'),
 						   final_drop:list = ['text', 'id']):
@@ -244,6 +237,28 @@ def makePredictData(csv_path:str, batch):
 	return data, loader
 
 # ================================ MODELS ========================================
+class MXP(torch.nn.Module):
+	def __init__(self):
+		super(MXP, self).__init__()
+	def forward(self, X):
+		seq_len = X.shape[1]
+		x_hat = X.permute((0,2,1))
+		x_hat = F.max_pool1d(x_hat,seq_len, stride=1)
+		x_hat = x_hat.permute((0,2,1))
+		return x_hat.squeeze()
+
+class ADDN(torch.nn.Module):
+	def __init__(self):
+		super(ADDN, self).__init__()
+	def forward(self, X):
+		return F.normalize(X.sum(dim=1), dim=-1)
+
+class POS(torch.nn.Module):
+	def __init__(self, _p = 0):
+		super(POS, self).__init__()
+		self._p = _p
+	def forward(self, X):
+		return X[:,self._p]
 
 class Encod_Model(nn.Module):
 	def __init__(self, hidden_size, vec_size, dropout=0.2):
@@ -344,7 +359,10 @@ class MaskedMSELoss(torch.nn.Module):
 		return (y_loss*y_mask).mean()
 
 class Bencoder_Model(nn.Module):
-	def __init__(self, hidden_size, vec_size=768, dropout=0.2, max_length=120):
+	def __init__(self, hidden_size, vec_size=768, dropout=0.2, max_length=120, selection='addn'):
+		'''
+			selection: ['addn', 'first', 'mxp']
+		'''
 		super(Bencoder_Model, self).__init__()
 		self.criterion1 = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
 		self.criterion2 = MaskedMSELoss()
@@ -353,15 +371,22 @@ class Bencoder_Model(nn.Module):
 		self.max_length = max_length
 		self.tok, self.bert = make_bert_pretrained_model()
 		self.encoder = Encod_Model(hidden_size, vec_size, dropout=dropout)
+		self.selection = None
+
+		if selection   == 'addn':
+			self.selection = ADDN()
+		elif selection == 'mxp':
+			self.selection = MXP()
+		elif selection == 'first':
+			self.selection = POS(0)
+
 		self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 		self.to(device=self.device)
 		
 	def forward(self, X, ret_vec=False):
-		ids  = self.tok(X, return_tensors='pt', truncation=True, padding=True, max_length=self.max_length).to(device=self.device)
-		out  = self.bert(**ids)
-		# vects = out[0][:,-1] # last or first
-		# vects = max_pool_op(out[0]) # Maxpool
-		vects = F.normalize(out[0].sum(dim=1), dim=-1) # Add and Norm
+		ids   = self.tok(X, return_tensors='pt', truncation=True, padding=True, max_length=self.max_length).to(device=self.device)
+		out   = self.bert(**ids)
+		vects = self.selection(out[0])
 		return self.encoder(vects, ret_vec=ret_vec)
 
 	def load(self, path):
@@ -389,11 +414,11 @@ class Bencoder_Model(nn.Module):
 			return torch.optim.RMSprop(pars, lr=lr, weight_decay=decay)
 	
 
-def makeModels(name:str, size, in_size=768, dpr=0.2):
+def makeModels(name:str, size, in_size=768, dpr=0.2, selection='addn'):
 	if name == 'encoder':
 		return Encod_Model(size, in_size, dropout=dpr)
 	elif name == 'bencoder':
-		return Bencoder_Model(size, in_size, dropout=dpr)
+		return Bencoder_Model(size, in_size, dropout=dpr, selection=selection)
 	elif name == 'siam':
 		return Siam_Model(size, in_size, dropout=dpr)
 	elif name == 'zmod':

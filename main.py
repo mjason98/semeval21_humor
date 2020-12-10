@@ -23,18 +23,19 @@ TEST_DATA_PATH  = 'data/public_dev.csv'
 BATCH  = 64
 EPOCHS = 20
 LR 	   = 5e-5
+SELOP  = 'addn'
 ONLINE_TR = True
-HSIZE    = 800
+HSIZE    = 512
 PRED_BATCH = 1
 MTL_ETHA  = 0.6
-BERT_OPTIM = 'rms' # ['adam' or 'rms']
+BERT_OPTIM = 'adam' # ['adam' or 'rms']
 
 SEQUENCE_LENGTH = 120
 
 SIAM_BATCH   = 64
 SIAM_SIZE    = 32
 SIAM_DROPOUT = 0.0
-SIAM_LR      = 0.001
+SIAM_LR      = 2e-5
 SIAM_EPOCH   = 50
 K,M          = 3, 7
 
@@ -48,13 +49,17 @@ def check_params(arg=None):
 	global ONLINE_TR
 	global BERT_OPTIM
 	global MTL_ETHA
+	global HSIZE
+	global SELOP
 
 	INFOMAP_PATH = '/DATA/work_space/2-AI/3-SemEval21/infomap-master'
 	INFOMAP_EX   = 'Infomap'
 
 	parse = argparse.ArgumentParser(description='SemEval2021 Humor')
-	parse.add_argument('-l1', dest='learning_rate', help='The learning rate to use in the optimizer', 
+	parse.add_argument('-l', dest='learning_rate', help='The learning rate to use in the optimizer', 
 					   required=False, default=LR)
+	parse.add_argument('-s', dest='encod_size', help='The size of the dense layer in the encoder', 
+					   required=False, default=HSIZE)
 	parse.add_argument('-b', dest='batchs', help='Amount of batchs', 
 					   required=False, default=BATCH)
 	parse.add_argument('-e', dest='epochs', help='Amount of epochs', 
@@ -71,13 +76,17 @@ def check_params(arg=None):
 					   required=False, default=INFOMAP_EX)
 	parse.add_argument('--optim', dest='optim', help='Optimazer to use in train', 
 					   required=False, default=BERT_OPTIM, choices=['adam', 'rms'])
+	parse.add_argument('--vector-op', dest='selec', help='Operation to select the last vector from the transformet to fit the dense layer', 
+					   required=False, default=SELOP, choices=['addn', 'first', 'mxp'])
 	parse.add_argument('--offline', help='Use a local transformer, default False', 
 					   required=False, action='store_false', default=True)
 	parse.add_argument('--etha', dest='etha', help='The multi task learning parameter to calculate the liner convex combination: \math\{loss = \ethaL_1 + (1 - \etha)L_2\}', 
 					   required=False, default=MTL_ETHA)					   
    
 	returns = parse.parse_args(arg)
-
+	
+	SELOP = returns.selec 
+	HSIZE = int(returns.encod_size)
 	MTL_ETHA = float(returns.etha)
 	LR    = float(returns.learning_rate)
 	BATCH = int(returns.batchs)
@@ -102,34 +111,15 @@ def check_params(arg=None):
 	if not os.path.isdir('preds'):
 		os.mkdir('preds')
 	
-	torch.manual_seed(12345)
-	np.random.seed(12345)
-	random.seed(12345)
+	torch.manual_seed(1234567)
+	np.random.seed(1234567)
+	random.seed(1234567)
 	
 	if not ONLINE_TR:
 		offline(True)
 
 def clear_environment():
 	delete_transformers()
-
-def makeFinalData_Model():
-	global DATA_PATH
-	global EVAL_DATA_PATH
-	global TEST_DATA_PATH
-
-	model = makeModels('siam', SIAM_SIZE, dpr=SIAM_DROPOUT, in_size=ENCODER_SIZE//4)
-	model.load(os.path.join('pts', 'siam.pt'))
-
-	DATA_PATH = makeSiam_ZData(DATA_PATH, model, ref_folder='data', batch=CZ_BATCH)
-	EVAL_DATA_PATH = makeSiam_ZData(EVAL_DATA_PATH, model, ref_folder='data', batch=CZ_BATCH)
-	TEST_DATA_PATH = makeSiam_ZData(TEST_DATA_PATH, model, ref_folder='data', batch=CZ_BATCH)
-
-	t_data, t_loader = makeDataSet_Vecs(DATA_PATH, batch=Z_BATCH)
-	e_data, e_loader = makeDataSet_Vecs(EVAL_DATA_PATH, batch=Z_BATCH)
-	
-	model = makeModels('zmod', 1, dpr=0., in_size=int(K*2)) #in_size=int((K+M)*2))
-	trainModels(model, t_loader, epochs=Z_EPOCH,evalData_loader=e_loader, 
-				lr=Z_LR, nameu='zmod')
 
 def TrainRawEncoder():
 	global DATA_PATH
@@ -139,7 +129,7 @@ def TrainRawEncoder():
 	t_data, t_loader = makeDataSet_Raw(DATA_PATH, batch=BATCH)
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH)
 
-	model = makeModels('bencoder', HSIZE, dpr=0.0)
+	model = makeModels('bencoder', HSIZE, dpr=0.0, selection=SELOP)
 	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader, etha=MTL_ETHA, mtl = False if MTL_ETHA >= 0.99 else True,
 				nameu='roberta', optim=model.makeOptimizer(lr=LR, algorithm=BERT_OPTIM))
 	del t_loader
@@ -172,7 +162,7 @@ def prep_Siam():
 	EVAL_DATA_PATH = 'data/dev_en.csv'
 
 	# findCenter_and_Limits(DATA_PATH, K,M, method='c-graph', method_distance='euclidea', umbral=(0.0013, 0.004), max_module=1)
-	findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral= 0.004, max_module=1) #0.004 # 10
+	findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral= 0.004, max_module=10) #0.004 # 10
 	projectData2D(DATA_PATH, save_name='2DataIMar2', use_centers=True)
 
 	# return 
