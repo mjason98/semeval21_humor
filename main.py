@@ -207,9 +207,9 @@ if __name__ == '__main__':
 	# Spliting data
 	# DATA_PATH, EVAL_DATA_PATH = makeTrain_and_ValData(DATA_PATH, percent=10)
 
-	# TrainRawEncoder()
-	prep_Siam()
-	pred_with_Siam()
+	TrainRawEncoder()
+	# prep_Siam()
+	# pred_with_Siam()
 	
 	# makeFinalData_Model()
 
