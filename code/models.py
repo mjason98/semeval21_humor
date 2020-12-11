@@ -263,7 +263,7 @@ class POS(torch.nn.Module):
 class Encod_Model(nn.Module):
 	def __init__(self, hidden_size, vec_size, dropout=0.2):
 		super(Encod_Model, self).__init__()
-		self.mid_size = 32
+		self.mid_size = 64
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
 									  nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
 									  nn.Linear(hidden_size//2, self.mid_size), nn.LeakyReLU())
@@ -426,7 +426,7 @@ def makeModels(name:str, size, in_size=768, dpr=0.2, selection='addn'):
 	else:
 		print ('ERROR::NAME', name, 'not founded!!')
 
-def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, etha=1., nameu='encoder', optim=None, b_fun=None, smood=False, mtl=True):
+def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, etha=1., nameu='encoder', optim=None, b_fun=None, smood=False, mtl=True, use_acc=True):
 	if epochs <= 0:
 		return
 	if optim is None:
@@ -460,25 +460,39 @@ def trainModels(model, Data_loader, epochs:int, evalData_loader=None, lr=0.1, et
 			optim.step()
 
 			with torch.no_grad():
-				total_loss += loss.item()
+				total_loss += loss.item() * y1.shape[0]
 				total_acc += (y1 == y_hat.argmax(dim=-1)).sum().item()
 				dl += y1.shape[0]
 			bar.next(total_loss/dl)
-		res = board.update('train', total_acc/dl, getBest=True)
+		if use_acc:
+			res = board.update('train', total_acc/dl, getBest=True)
+		else:
+			res = board.update('train', total_loss/dl, getBest=True)
 		
 		# Evaluate the model
 		if evalData_loader is not None:
-			total_acc, dl= 0,0
+			total_loss, total_acc, dl= 0,0,0
 			with torch.no_grad():
 				for data in evalData_loader:
 					y_hat, y_val = model(data['x'])
 					y1 = data['y'].to(device=model.device)
 					y2 = data['v'].to(device=model.device)
 
+					if mtl:
+						l1 = model.criterion1(y_hat, y1)
+						l2 = model.criterion2(y_val, y2, y1)
+						loss = etha*l1 + (1. - etha)*l2
+					else:
+						loss = model.criterion1(y_hat, y1)
+					
+					total_loss += loss.item() * y1.shape[0]
 					total_acc += (y1 == y_hat.argmax(dim=-1)).sum().item()
 					dl += y1.shape[0]
 					bar.next()
-			res = board.update('test', total_acc/dl, getBest=True)
+			if use_acc:
+				res = board.update('test', total_acc/dl, getBest=True)
+			else:
+				res = board.update('test', total_loss/dl, getBest=True)
 		bar.finish()
 		del bar
 		
