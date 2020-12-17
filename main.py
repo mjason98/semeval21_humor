@@ -66,8 +66,6 @@ def check_params(arg=None):
 					   required=False, default=LR2)
 	parse.add_argument('--dropout', dest='dropout', help='Dropout in the encoder', 
 					   required=False, default=DPR)
-	parse.add_argument('-l2', dest='learning_rate_2', help='The second learning rate to use in the optimizer', 
-					   required=False, default=LR2)
 	parse.add_argument('-s', dest='encod_size', help='The size of the dense layer in the encoder', 
 					   required=False, default=HSIZE)
 	parse.add_argument('-b', dest='batchs', help='Number of batchs', 
