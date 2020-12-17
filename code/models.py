@@ -14,12 +14,20 @@ from torch.utils.data import Dataset, DataLoader
 
 OFFLINE = False
 OFFLINE_PATH = "/DATA/Mainstorage/Prog/NLP/vinai/bertweet-base"
+ONLINE_NAME  = "vinai/bertweet-base"
 TOKENIZER_PRE = None
 TRANS_MODEL   = None
 
 def offline(band: bool):
 	global OFFLINE
 	OFFLINE = band
+
+def setOfflinePath(path:str):
+	global OFFLINE_PATH
+	OFFLINE_PATH = path
+def setOnlineName(name:str):
+	global ONLINE_NAME
+	ONLINE_NAME = name
 
 def make_bert_pretrained_model(mod_only=False):
 	'''
@@ -28,8 +36,8 @@ def make_bert_pretrained_model(mod_only=False):
 	tokenizer, model = None, None
 
 	if not OFFLINE:
-		tokenizer = AutoTokenizer.from_pretrained("vinai/bertweet-base")
-		model = AutoModel.from_pretrained("vinai/bertweet-base")
+		tokenizer = AutoTokenizer.from_pretrained(ONLINE_NAME)
+		model = AutoModel.from_pretrained(ONLINE_NAME)
 	else:
 		tokenizer = AutoTokenizer.from_pretrained(OFFLINE_PATH)
 		model = AutoModel.from_pretrained(OFFLINE_PATH)

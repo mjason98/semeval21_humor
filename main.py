@@ -10,6 +10,7 @@ from code.models import offline, load_transformers, delete_transformers
 from code.models import makeModels, trainModels, makeDataSet_Vecs
 from code.models import evaluateModels, makePredictData
 from code.models import makeDataSet_Siam, makeDataSet_Raw
+from code.models import setOfflinePath, setOnlineName
 from code.utils  import projectData2D
 from code.siam   import makeSiam_ZData, predictManual, setInfomapData
 from code.siam   import findCenter_and_Limits, makeSiamData, convert2EncoderVec
@@ -58,6 +59,8 @@ def check_params(arg=None):
 
 	INFOMAP_PATH = '/DATA/work_space/2-AI/3-SemEval21/infomap-master'
 	INFOMAP_EX   = 'Infomap'
+	OFFLINE_PATH = "/DATA/Mainstorage/Prog/NLP/vinai/bertweet-base"
+	ONLINE_NAME  = "vinai/bertweet-base"
 
 	parse = argparse.ArgumentParser(description='SemEval2021 Humor')
 	parse.add_argument('-l1', dest='learning_rate_1', help='The firts learning rate to use in the optimizer', 
@@ -86,10 +89,14 @@ def check_params(arg=None):
 					   required=False, default=BERT_OPTIM, choices=['adam', 'rms'])
 	parse.add_argument('--vector-op', dest='selec', help='Operation to select the last vector from the transformet to fit the dense layer', 
 					   required=False, default=SELOP, choices=['addn', 'first', 'mxp', 'att'])
+	parse.add_argument('--etha', dest='etha', help='The multi task learning parameter to calculate the liner convex combination: \math\{loss = \ethaL_1 + (1 - \etha)L_2\}', 
+					   required=False, default=MTL_ETHA)		
 	parse.add_argument('--offline', help='Use a local transformer, default False', 
 					   required=False, action='store_false', default=True)
-	parse.add_argument('--etha', dest='etha', help='The multi task learning parameter to calculate the liner convex combination: \math\{loss = \ethaL_1 + (1 - \etha)L_2\}', 
-					   required=False, default=MTL_ETHA)					   
+	parse.add_argument('--trans-offp', dest='offp', help='The local folder path to the pre-trained transformer', 
+					   required=False, default=OFFLINE_PATH)
+	parse.add_argument('--trans-onln', dest='onln', help='The transformers name', 
+					   required=False, default=ONLINE_NAME)			   
    
 	returns = parse.parse_args(arg)
 	
@@ -111,6 +118,10 @@ def check_params(arg=None):
 	INFOMAP_EX = returns.iname 
 	INFOMAP_PATH = returns.ipath
 	setInfomapData(INFOMAP_PATH, INFOMAP_EX)
+
+	# Set Transformers staf
+	setOfflinePath(OFFLINE_PATH)
+	setOnlineName(ONLINE_NAME)
 
 	if not os.path.isdir('data'):
 		os.mkdir('data')
