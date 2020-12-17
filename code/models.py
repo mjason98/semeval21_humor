@@ -39,7 +39,10 @@ def make_bert_pretrained_model(mod_only=False):
 	else:
 		return tokenizer, model
 
-def makeTrain_and_ValData(data_path:str, percent=10):
+def makeTrain_and_ValData(data_path:str, percent=10, class_label=None):
+	'''
+		class_lable: str The label to split, the humor column with values ['0', '1']
+	'''
 	train_path = os.path.join('data', 'train_data.csv')
 	eval_path  = os.path.join('data', 'eval_data.csv')
 
@@ -53,13 +56,27 @@ def makeTrain_and_ValData(data_path:str, percent=10):
 	var = (var - mean) ** 0.5
 	print ('# Mean:', mean, 'std:', var)
 
-	percent = (len(data) * percent) // 100
-	ides = [i for i in range(len(data))]
-	random.shuffle(ides)
-
-	train_data = data.drop(ides[:percent])
-	eval_data  = data.drop(ides[percent:])
 	
+	train_data, eval_data = None, None
+	if class_label is None:
+		percent = (len(data) * percent) // 100
+		ides = [i for i in range(len(data))]
+		random.shuffle(ides)
+
+		train_data = data.drop(ides[:percent])
+		eval_data  = data.drop(ides[percent:])
+	else:
+		pos  = list(data.query(class_label+' == 1').index)
+		neg  = list(data.query(class_label+' == 0').index)
+		random.shuffle(pos)
+		random.shuffle(neg)
+
+		p1,p2 = (len(pos) * percent) // 100, (len(neg) * percent) // 100
+		indes_t, indes_e = pos[:p1] + neg[:p2], pos[p1:] + neg[p2:]
+
+		train_data = data.drop(indes_t)
+		eval_data  = data.drop(indes_e)
+
 	train_data.to_csv(train_path, index=None)
 	eval_data.to_csv(eval_path, index=None)
 
@@ -260,11 +277,19 @@ class POS(torch.nn.Module):
 	def forward(self, X):
 		return X[:,self._p]
 
+class ATT(torch.nn.Module):
+	def __init__(self, in_size = 768):
+		super(ATT, self).__init__()
+		self.A = nn.Linear(in_size, 1)
+	def forward(self, X):		
+		alpha = F.softmax(self.A(X), dim=-1)
+		return (alpha * X).sum(dim=1)
+
 class Encod_Model(nn.Module):
-	def __init__(self, hidden_size, vec_size, dropout=0.2):
+	def __init__(self, hidden_size, vec_size, dropout=0.1):
 		super(Encod_Model, self).__init__()
 		self.mid_size = 64
-		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
+		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), nn.Dropout(dropout), 
 									  nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
 									  nn.Linear(hidden_size//2, self.mid_size), nn.LeakyReLU())
 		self.Task1   = nn.Linear(self.mid_size, 2)
@@ -359,9 +384,9 @@ class MaskedMSELoss(torch.nn.Module):
 		return (y_loss*y_mask).mean()
 
 class Bencoder_Model(nn.Module):
-	def __init__(self, hidden_size, vec_size=768, dropout=0.2, max_length=120, selection='addn'):
+	def __init__(self, hidden_size, vec_size=768, dropout=0.1, max_length=120, selection='addn'):
 		'''
-			selection: ['addn', 'first', 'mxp']
+			selection: ['addn', 'first', 'mxp', 'att']
 		'''
 		super(Bencoder_Model, self).__init__()
 		self.criterion1 = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
@@ -379,6 +404,8 @@ class Bencoder_Model(nn.Module):
 			self.selection = MXP()
 		elif selection == 'first':
 			self.selection = POS(0)
+		elif selection == 'att':
+			self.selection = ATT(in_size=vec_size)
 
 		self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 		self.to(device=self.device)
@@ -414,7 +441,7 @@ class Bencoder_Model(nn.Module):
 			return torch.optim.RMSprop(pars, lr=lr, weight_decay=decay)
 	
 
-def makeModels(name:str, size, in_size=768, dpr=0.2, selection='addn'):
+def makeModels(name:str, size, in_size=768, dpr=0.1, selection='addn'):
 	if name == 'encoder':
 		return Encod_Model(size, in_size, dropout=dpr)
 	elif name == 'bencoder':

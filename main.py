@@ -22,12 +22,14 @@ TEST_DATA_PATH  = 'data/public_dev.csv'
 
 BATCH  = 64
 EPOCHS = 20
-LR 	   = 5e-5
+LR1	   = 5e-5
+LR2	   = 3e-5
+DPR    = 0.0
 SELOP  = 'addn'
 ONLINE_TR = True
-HSIZE    = 512
+HSIZE    = 700
 PRED_BATCH = 1
-MTL_ETHA  = 0.6
+MTL_ETHA  = 1.0
 BERT_OPTIM = 'adam' # ['adam' or 'rms']
 
 SEQUENCE_LENGTH = 120
@@ -41,7 +43,8 @@ K,M          = 3, 7
 
 def check_params(arg=None):
 	global BATCH
-	global LR
+	global LR1
+	global LR2
 	global EPOCHS
 	global TEST_DATA_PATH
 	global DATA_PATH
@@ -51,13 +54,20 @@ def check_params(arg=None):
 	global MTL_ETHA
 	global HSIZE
 	global SELOP
+	global DPR
 
 	INFOMAP_PATH = '/DATA/work_space/2-AI/3-SemEval21/infomap-master'
 	INFOMAP_EX   = 'Infomap'
 
 	parse = argparse.ArgumentParser(description='SemEval2021 Humor')
-	parse.add_argument('-l', dest='learning_rate', help='The learning rate to use in the optimizer', 
-					   required=False, default=LR)
+	parse.add_argument('-l1', dest='learning_rate_1', help='The firts learning rate to use in the optimizer', 
+					   required=False, default=LR1)
+	parse.add_argument('-l2', dest='learning_rate_2', help='The second learning rate to use in the optimizer', 
+					   required=False, default=LR2)
+	parse.add_argument('--dropout', dest='dropout', help='Dropout in the encoder', 
+					   required=False, default=DPR)
+	parse.add_argument('-l2', dest='learning_rate_2', help='The second learning rate to use in the optimizer', 
+					   required=False, default=LR2)
 	parse.add_argument('-s', dest='encod_size', help='The size of the dense layer in the encoder', 
 					   required=False, default=HSIZE)
 	parse.add_argument('-b', dest='batchs', help='Number of batchs', 
@@ -77,7 +87,7 @@ def check_params(arg=None):
 	parse.add_argument('--optim', dest='optim', help='Optimazer to use in train', 
 					   required=False, default=BERT_OPTIM, choices=['adam', 'rms'])
 	parse.add_argument('--vector-op', dest='selec', help='Operation to select the last vector from the transformet to fit the dense layer', 
-					   required=False, default=SELOP, choices=['addn', 'first', 'mxp'])
+					   required=False, default=SELOP, choices=['addn', 'first', 'mxp', 'att'])
 	parse.add_argument('--offline', help='Use a local transformer, default False', 
 					   required=False, action='store_false', default=True)
 	parse.add_argument('--etha', dest='etha', help='The multi task learning parameter to calculate the liner convex combination: \math\{loss = \ethaL_1 + (1 - \etha)L_2\}', 
@@ -85,17 +95,19 @@ def check_params(arg=None):
    
 	returns = parse.parse_args(arg)
 	
-	SELOP = returns.selec 
-	HSIZE = int(returns.encod_size)
-	MTL_ETHA = float(returns.etha)
-	LR    = float(returns.learning_rate)
-	BATCH = int(returns.batchs)
-	EPOCHS = int(returns.epochs)
+	SELOP          = returns.selec 
+	HSIZE          = int(returns.encod_size)
+	MTL_ETHA       = float(returns.etha)
+	LR1            = float(returns.learning_rate_1)
+	LR2            = float(returns.learning_rate_2)
+	BATCH          = int(returns.batchs)
+	EPOCHS         = int(returns.epochs)
 	TEST_DATA_PATH = returns.predict
-	DATA_PATH = returns.train_data
+	DATA_PATH      = returns.train_data
 	EVAL_DATA_PATH = returns.dev_data
-	ONLINE_TR = bool(returns.offline)
-	BERT_OPTIM = returns.optim
+	ONLINE_TR      = bool(returns.offline)
+	BERT_OPTIM     = returns.optim
+	DPR            = float(DPR)
 	
 	# Set Infomap staf
 	INFOMAP_EX = returns.iname 
@@ -111,9 +123,9 @@ def check_params(arg=None):
 	if not os.path.isdir('preds'):
 		os.mkdir('preds')
 	
-	torch.manual_seed(1234567)
-	np.random.seed(1234567)
-	random.seed(1234567)
+	torch.manual_seed(123456)
+	np.random.seed(123456)
+	random.seed(123456)
 	
 	if not ONLINE_TR:
 		offline(True)
@@ -129,9 +141,9 @@ def TrainRawEncoder():
 	t_data, t_loader = makeDataSet_Raw(DATA_PATH, batch=BATCH)
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH)
 
-	model = makeModels('bencoder', HSIZE, dpr=0.0, selection=SELOP)
+	model = makeModels('bencoder', HSIZE, dpr=DPR, selection=SELOP)
 	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader, etha=MTL_ETHA, mtl = False if MTL_ETHA >= 0.99 else True,
-				nameu='roberta', optim=model.makeOptimizer(lr=LR, algorithm=BERT_OPTIM))
+				nameu='roberta', optim=model.makeOptimizer(lr=LR1, lr_fin=LR2, algorithm=BERT_OPTIM))
 	del t_loader
 	del e_loader
 	del t_data
@@ -205,7 +217,7 @@ if __name__ == '__main__':
 	check_params(arg=sys.argv[1:])
 
 	# Spliting data
-	# DATA_PATH, EVAL_DATA_PATH = makeTrain_and_ValData(DATA_PATH, percent=10)
+	DATA_PATH, EVAL_DATA_PATH = makeTrain_and_ValData(DATA_PATH, percent=10, class_label='is_humor')
 
 	TrainRawEncoder()
 	# prep_Siam()
