@@ -120,6 +120,8 @@ def check_params(arg=None):
 	setInfomapData(INFOMAP_PATH, INFOMAP_EX)
 
 	# Set Transformers staf
+	OFFLINE_PATH = returns.offp 
+	ONLINE_NAME  = returns.onln
 	setOfflinePath(OFFLINE_PATH)
 	setOnlineName(ONLINE_NAME)
 

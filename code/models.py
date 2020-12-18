@@ -13,8 +13,8 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 OFFLINE = False
-OFFLINE_PATH = "/DATA/Mainstorage/Prog/NLP/vinai/bertweet-base"
-ONLINE_NAME  = "vinai/bertweet-base"
+OFFLINE_PATH = ""
+ONLINE_NAME  = ""
 TOKENIZER_PRE = None
 TRANS_MODEL   = None
 
