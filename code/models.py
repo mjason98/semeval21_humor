@@ -439,14 +439,14 @@ class Bencoder_Model(nn.Module):
 			D = {'params':l.parameters(), 'lr':lr_t}
 			pars.append(D)
 			lamda += mtl 
-		lr_t = (1. - lamda)*lr + lamda*lr_fin
-		D = {'params':self.bert.pooler.parameters(), 'lr':lr_t}
-		pars.append(D)
+		# lr_t = (1. - lamda)*lr + lamda*lr_fin
+		# D = {'params':self.bert.pooler.parameters(), 'lr':lr_t}
+		# pars.append(D)
 
 		if algorithm == 'adam':
-			return torch.optim.Adam(pars, lr=lr, weight_decay=decay)
+			return torch.optim.Adam(pars, lr=lr_fin, weight_decay=decay)
 		elif algorithm == 'rms':
-			return torch.optim.RMSprop(pars, lr=lr, weight_decay=decay)
+			return torch.optim.RMSprop(pars, lr=lr_fin, weight_decay=decay)
 	
 
 def makeModels(name:str, size, in_size=768, dpr=0.1, selection='addn'):
