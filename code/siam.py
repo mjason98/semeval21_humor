@@ -194,6 +194,7 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
 
         # Extract the modules center node by max flux criteria
         pos_modules, pos_i = 0, 0
+        pos_ides, neg_ides = [], []
         with open(os.path.join('data', os.path.basename(pos_name)+'.tree'), 'r') as file:
             for lines in file.readlines():
                 if lines[0] == '#':
@@ -203,9 +204,11 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
                     pos_i = 1
                     pos_modules = mod
                     pos_c.append(pos[ int(lines.split()[-1]) ].tolist())
+                    pos_ides.append(int(lines.split()[-1]))
                 elif mod == pos_modules and pos_i < max_module:
                     pos_i += 1
                     pos_c.append(pos[ int(lines.split()[-1]) ].tolist())
+                    pos_ides.append(int(lines.split()[-1]))
         
         neg_modules, neg_i = 0, 0
         with open(os.path.join('data', os.path.basename(neg_name)+'.tree'), 'r') as file:
@@ -217,10 +220,24 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
                     neg_i = 1
                     neg_modules = mod
                     neg_c.append(neg[ int(lines.split()[-1]) ].tolist())
+                    neg_ides.append(int(lines.split()[-1]))
                 elif mod == neg_modules and neg_i < max_module:
                     neg_i += 1
                     neg_c.append(neg[ int(lines.split()[-1]) ].tolist())
+                    neg_ides.append(int(lines.split()[-1]))
         
+        # data2 = pd.read_csv(data_path)
+        # data2.drop(['humor_rating'], axis=1, inplace=True)
+        # pos2  = data2.query('is_humor == 1').drop(['is_humor', 'vecs'], axis=1).to_numpy()
+        # neg2  = data2.query('is_humor == 0').drop(['is_humor', 'vecs'], axis=1).to_numpy()
+        # del data2
+        # pos_ides = pos2[pos_ides]
+        # neg_ides = neg2[neg_ides]
+        # np.save('data/posides.npy', pos_ides)
+        # np.save('data/negides.npy', neg_ides)
+        # del pos2 
+        # del neg2
+
         os.remove(os.path.join('data', os.path.basename(pos_name)+'.tree'))
         os.remove(os.path.join('data', os.path.basename(neg_name)+'.tree'))
         os.remove(os.path.join('data', os.path.basename(pos_name)))

@@ -301,8 +301,8 @@ class Encod_Model(nn.Module):
 									  nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
 									  nn.Linear(hidden_size//2, self.mid_size), nn.LeakyReLU())
 		self.Task1   = nn.Linear(self.mid_size, 2)
-		self.Task2   = nn.Sequential(nn.Linear(self.mid_size, self.mid_size//2), 
-									 nn.ReLU(), nn.Linear(self.mid_size//2, 1), nn.ReLU())
+		self.Task2   = nn.Linear(self.mid_size, 1)
+
 	def forward(self, X, ret_vec=False):
 		y_hat = self.Dense1(X)
 		if ret_vec:
@@ -439,9 +439,12 @@ class Bencoder_Model(nn.Module):
 			D = {'params':l.parameters(), 'lr':lr_t}
 			pars.append(D)
 			lamda += mtl 
-		# lr_t = (1. - lamda)*lr + lamda*lr_fin
-		# D = {'params':self.bert.pooler.parameters(), 'lr':lr_t}
-		# pars.append(D)
+		try:
+			lr_t = (1. - lamda)*lr + lamda*lr_fin
+			D = {'params':self.bert.pooler.parameters(), 'lr':lr_t}
+			pars.append(D)
+		except:
+			print('#Warning: Pooler layer not found')
 
 		if algorithm == 'adam':
 			return torch.optim.Adam(pars, lr=lr_fin, weight_decay=decay)

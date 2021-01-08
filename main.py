@@ -40,7 +40,7 @@ SIAM_SIZE    = 32
 SIAM_DROPOUT = 0.0
 SIAM_LR      = 2e-3 #2
 SIAM_EPOCH   = 50
-K,M          = 3, 7
+K,M          = 2, 3 #3,7
 
 def check_params(arg=None):
 	global BATCH
@@ -185,20 +185,21 @@ def prep_Siam():
 	EVAL_DATA_PATH = 'data/dev_en.csv'
 
 	# findCenter_and_Limits(DATA_PATH, K,M, method='c-graph', method_distance='euclidea', umbral=(0.0013, 0.004), max_module=1)
-	# findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral= 0.004, max_module=10) #0.004 # 10
-	# projectData2D(DATA_PATH, save_name='2DataIMar2', use_centers=True)
+	# findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral= 0.001, max_module=20) #0.004
+	# projectData2D(DATA_PATH, save_name='2OldEncod', use_centers=True)
 
 	# return 
 
-	# dts = makeSiamData(DATA_PATH, K, M, ref_folder='data', distance='euclidea')
-	# des = makeSiamData(EVAL_DATA_PATH, K, M, ref_folder='data', distance='euclidea')
-	dts = 'data/Siamtrain_en.csv'
-	des = 'data/Siamdev_en.csv'
+	dts = makeSiamData(DATA_PATH, K, M, ref_folder='data', distance='euclidea')
+	des = makeSiamData(EVAL_DATA_PATH, K, M, ref_folder='data', distance='euclidea')
+	# dts = 'data/Siamtrain_en.csv'
+	# des = 'data/Siamdev_en.csv'
+
 
 	t_data, t_loader = makeDataSet_Siam(dts, batch=SIAM_BATCH)
 	e_data, e_loader = makeDataSet_Siam(des, batch=SIAM_BATCH)
 
-	model = makeModels('siam', SIAM_SIZE, dpr=SIAM_DROPOUT, in_size=32)
+	model = makeModels('siam', SIAM_SIZE, dpr=SIAM_DROPOUT, in_size=200)
 	trainModels(model, t_loader, epochs=SIAM_EPOCH, evalData_loader=e_loader,
 				lr=SIAM_LR, nameu='siames', b_fun=min, smood=True, mtl=False, use_acc=False)
 
@@ -213,7 +214,7 @@ def pred_with_Siam():
 	EVAL_DATA_PATH = 'data/dev_en.csv'
 	DATA_PATH = 'data/train_en.csv'
 
-	model = makeModels('siam', SIAM_SIZE, dpr=SIAM_DROPOUT, in_size=32)
+	model = makeModels('siam', SIAM_SIZE, dpr=SIAM_DROPOUT, in_size=200)
 	model.load(os.path.join('pts', 'siames.pt'))
 	
 	DATA_PATH, K, M = makeSiam_ZData(DATA_PATH, model, ref_folder='data', batch=PRED_BATCH)
