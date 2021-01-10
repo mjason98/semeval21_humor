@@ -425,7 +425,7 @@ class Bencoder_Model(nn.Module):
 		return self.encoder(vects, ret_vec=ret_vec)
 
 	def load(self, path):
-		self.load_state_dict(torch.load(path))
+		self.load_state_dict(torch.load(path, map_location=self.device))
 
 	def save(self, path):
 		torch.save(self.state_dict(), path) 

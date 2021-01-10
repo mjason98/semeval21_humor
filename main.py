@@ -114,7 +114,7 @@ def check_params(arg=None):
 	EVAL_DATA_PATH = returns.dev_data
 	ONLINE_TR      = bool(returns.offline)
 	BERT_OPTIM     = returns.optim
-	DPR            = float(returns.DPR)
+	DPR            = float(returns.dropout)
 	my_seed		   = int(returns.my_seed)
 	
 	# Set Infomap staf
