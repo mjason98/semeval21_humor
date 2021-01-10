@@ -81,6 +81,8 @@ def check_params(arg=None):
 					   required=False, default=DATA_PATH)
 	parse.add_argument('-d', dest='dev_data', help='Development Data', 
 					   required=False, default=EVAL_DATA_PATH)
+	parse.add_argument('--seed', dest='my_seed', help='Random Seed', 
+					   required=False, default=12345)
 	parse.add_argument('--infomap-path', dest='ipath', help='Path to infomap executable', 
 					   required=False, default=INFOMAP_PATH)
 	parse.add_argument('--infomap-name', dest='iname', help='Infomap executable name', 
@@ -112,7 +114,8 @@ def check_params(arg=None):
 	EVAL_DATA_PATH = returns.dev_data
 	ONLINE_TR      = bool(returns.offline)
 	BERT_OPTIM     = returns.optim
-	DPR            = float(DPR)
+	DPR            = float(returns.DPR)
+	my_seed		   = int(returns.my_seed)
 	
 	# Set Infomap staf
 	INFOMAP_EX = returns.iname 
@@ -134,9 +137,9 @@ def check_params(arg=None):
 	if not os.path.isdir('preds'):
 		os.mkdir('preds')
 	
-	torch.manual_seed(123456)
-	np.random.seed(123456)
-	random.seed(123456)
+	torch.manual_seed(my_seed)
+	np.random.seed(my_seed)
+	random.seed(my_seed)
 	
 	if not ONLINE_TR:
 		offline(True)
