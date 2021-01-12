@@ -22,6 +22,17 @@ def setInfomapData(p1, p2):
     INFOMAP_PATH = p1
     INFOMAP_EX   = p2
 
+def completeNodes(reference:list, store:list, vects:list):
+    Len = len(reference)
+    reference.sort()
+    p = 0
+    
+    for i in range(len(vects)):	
+        if p >= Len or i < reference[p]:
+            store.append(vects[i])
+        while p < Len and reference[p] == i:
+            p += 1
+
 def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_distance='euclidea', eps=1e-7, umbral = 0.05, max_module=1):
     '''
       For a cvs with vectors, find the K representatives an the M frotiers.
@@ -102,12 +113,12 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
         del neg 
         del mv
     elif method == 'i-graph':
-        if type(umbral) is not float:
-            umbral = umbral[0]
+        if type(umbral) is float:
+            umbral = (umbral, umbral)
         if not os.path.isdir(INFOMAP_PATH):
             print ('ERROR::PATH the path', INFOMAP_PATH, 'does not exist!, This function will be skiped')
             return
-        print ('Making graphs, the threshold will be calculated with a {:.3}% of the edges'.format(umbral*100))
+        print ('Making graphs, the threshold will be calculated with a {:.3}%, {:.3}% of positive and negative edges'.format(umbral[0]*100, umbral[1]*100))
         bar = MyBar('i-graph', max=len(pos)+len(neg))
         
         pos_name = os.path.join('data', 'pos_graf_'+method_distance)
@@ -139,7 +150,7 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
                     else:
                         pos_max = max(pos_max, tmp_v[j])
                 bar.next()
-        pos_umb = (1 - umbral)*pos_min + umbral*pos_max
+        pos_umb = (1 - umbral[0])*pos_min + umbral[0]*pos_max
 
 
         neg_name = os.path.join('data', 'neg_graf_'+method_distance)
@@ -171,7 +182,7 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
                     else:
                         neg_max = max(neg_max, tmp_v[j])
                 bar.next()
-        neg_umb = (1 - umbral)*neg_min + umbral*neg_max
+        neg_umb = (1 - umbral[1])*neg_min + umbral[1]*neg_max
         del neg_max
         del neg_min
         bar.finish()
@@ -200,15 +211,18 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
                 if lines[0] == '#':
                     continue
                 mod = int(lines.split()[0].split(':')[0])
+                pos_ides.append(int(lines.split()[-1]))
+
                 if mod > pos_modules:
                     pos_i = 1
                     pos_modules = mod
                     pos_c.append(pos[ int(lines.split()[-1]) ].tolist())
-                    pos_ides.append(int(lines.split()[-1]))
                 elif mod == pos_modules and pos_i < max_module:
                     pos_i += 1
                     pos_c.append(pos[ int(lines.split()[-1]) ].tolist())
-                    pos_ides.append(int(lines.split()[-1]))
+        
+        # Add the singles nodes (positives)
+        completeNodes(pos_ides, pos_c, pos)
         
         neg_modules, neg_i = 0, 0
         with open(os.path.join('data', os.path.basename(neg_name)+'.tree'), 'r') as file:
@@ -216,27 +230,18 @@ def findCenter_and_Limits(data_path:str, K:int, M:int, method='k-means', method_
                 if lines[0] == '#':
                     continue
                 mod = int(lines.split()[0].split(':')[0])
+                neg_ides.append(int(lines.split()[-1]))
+
                 if mod > neg_modules:
                     neg_i = 1
                     neg_modules = mod
                     neg_c.append(neg[ int(lines.split()[-1]) ].tolist())
-                    neg_ides.append(int(lines.split()[-1]))
                 elif mod == neg_modules and neg_i < max_module:
                     neg_i += 1
                     neg_c.append(neg[ int(lines.split()[-1]) ].tolist())
-                    neg_ides.append(int(lines.split()[-1]))
         
-        # data2 = pd.read_csv(data_path)
-        # data2.drop(['humor_rating'], axis=1, inplace=True)
-        # pos2  = data2.query('is_humor == 1').drop(['is_humor', 'vecs'], axis=1).to_numpy()
-        # neg2  = data2.query('is_humor == 0').drop(['is_humor', 'vecs'], axis=1).to_numpy()
-        # del data2
-        # pos_ides = pos2[pos_ides]
-        # neg_ides = neg2[neg_ides]
-        # np.save('data/posides.npy', pos_ides)
-        # np.save('data/negides.npy', neg_ides)
-        # del pos2 
-        # del neg2
+        # Add the singles nodes (negatives)
+        completeNodes(neg_ides, neg_c, neg)
 
         os.remove(os.path.join('data', os.path.basename(pos_name)+'.tree'))
         os.remove(os.path.join('data', os.path.basename(neg_name)+'.tree'))
