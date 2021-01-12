@@ -170,7 +170,7 @@ def TrainRawEncoder():
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH, shuffle=False)
 
 	# Make predictions using only the encoder
-	evaluateModels(model, loader, name='pred_en')
+	evaluateModels(model, loader, name='pred_en', cleaner=['humor_rating'])
 	# Convert the data into vectors
 	DATA_PATH      = convert2EncoderVec('train_en', model, t_loader, save_as_numpy=True)
 	EVAL_DATA_PATH = convert2EncoderVec('dev_en', model, e_loader, save_as_numpy=True)
