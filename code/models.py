@@ -341,7 +341,7 @@ class MAN(nn.Module):
 
 			# usar prev_M_T para normalizar si da error
 			k_w  = torch.einsum('bi,bj->bij', w_w, key).sum(dim=0)
-			k_w  = F.normalize(prev_M_t + k_w, dim=-1).numpy()
+			k_w  = F.normalize(prev_M_t + k_w, dim=-1).cpu().numpy()
 			self.M[:,:] = k_w[:,:]
 
 			prev_r[:,:] = w_r.detach().numpy()[:,:]

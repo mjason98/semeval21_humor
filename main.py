@@ -161,9 +161,8 @@ def TrainRawEncoder():
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH)
 
 	model = makeModels('bencoder', HSIZE, dpr=DPR, selection=SELOP, memory_size=MS)
-	model.save(os.path.join('pts', 'roberta.pt'))
-	# trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader, etha=MTL_ETHA, mtl = False if MTL_ETHA >= 0.99 else True,
-				# nameu='roberta', optim=model.makeOptimizer(lr=LR1, lr_fin=LR2, algorithm=BERT_OPTIM))
+	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader, etha=MTL_ETHA, mtl = False if MTL_ETHA >= 0.99 else True,
+				nameu='roberta', optim=model.makeOptimizer(lr=LR1, lr_fin=LR2, algorithm=BERT_OPTIM))
 	del t_loader
 	del e_loader
 	del t_data
