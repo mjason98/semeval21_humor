@@ -344,8 +344,8 @@ class MAN(nn.Module):
 			k_w  = F.normalize(prev_M_t + k_w, dim=-1).cpu().numpy()
 			self.M[:,:] = k_w[:,:]
 
-			prev_r[:,:] = w_r.detach().numpy()[:,:]
-			new_u    = F.normalize(self.gamma*prev_w_u + w_r + w_w, dim=-1).numpy()
+			prev_r[:,:] = w_r.detach().cpu().numpy()[:,:]
+			new_u    = F.normalize(self.gamma*prev_w_u + w_r + w_w, dim=-1).cpu().numpy()
 			w_u[:,:]   = new_u[:,:]
 
 	def forward(self, X):
