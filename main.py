@@ -9,7 +9,7 @@ from code.models import makeTrain_and_ValData
 from code.models import offline, load_transformers, delete_transformers
 from code.models import makeModels, trainModels, makeDataSet_Vecs
 from code.models import evaluateModels, makePredictData
-from code.models import makeDataSet_Siam, makeDataSet_Raw
+from code.models import makeDataSet_Siam, makeDataSet_Raw, makeDataSet_ZO
 from code.models import setOfflinePath, setOnlineName
 from code.utils  import projectData2D
 from code.siam   import makeSiam_ZData, predictManual, setInfomapData
@@ -32,15 +32,16 @@ HSIZE    = 700
 PRED_BATCH = 1
 MTL_ETHA  = 1.0
 BERT_OPTIM = 'adam' # ['adam' or 'rms']
+MS = None # Use MAN in the encoder
 
 SEQUENCE_LENGTH = 120
 
 SIAM_BATCH   = 64
 SIAM_SIZE    = 32
-SIAM_DROPOUT = 0.0
-SIAM_LR      = 5e-4 #2e-4
-SIAM_EPOCH   = 50
-K,M          = 3, 5 #2,3
+SIAM_DROPOUT = 0.25
+SIAM_LR      = 2e-5 #2e-4
+SIAM_EPOCH   = 20
+K,M          = 2, 5 #2,3
 
 def check_params(arg=None):
 	global BATCH
@@ -56,6 +57,7 @@ def check_params(arg=None):
 	global HSIZE
 	global SELOP
 	global DPR
+	global MS
 
 	INFOMAP_PATH = '/DATA/work_space/2-AI/3-SemEval21/infomap-master'
 	INFOMAP_EX   = 'Infomap'
@@ -95,6 +97,8 @@ def check_params(arg=None):
 					   required=False, default=MTL_ETHA)		
 	parse.add_argument('--offline', help='Use a local transformer, default False', 
 					   required=False, action='store_false', default=True)
+	parse.add_argument('--useman', help='Use a Memory Augmented Network on top of the encoder, default False', 
+					   required=False, action='store_false', default=True)
 	parse.add_argument('--trans-offp', dest='offp', help='The local folder path to the pre-trained transformer', 
 					   required=False, default=OFFLINE_PATH)
 	parse.add_argument('--trans-onln', dest='onln', help='The transformers name', 
@@ -116,6 +120,7 @@ def check_params(arg=None):
 	BERT_OPTIM     = returns.optim
 	DPR            = float(returns.dropout)
 	my_seed		   = int(returns.my_seed)
+	MS             = None if bool(returns.useman) else 300
 	
 	# Set Infomap staf
 	INFOMAP_EX = returns.iname 
@@ -155,9 +160,10 @@ def TrainRawEncoder():
 	t_data, t_loader = makeDataSet_Raw(DATA_PATH, batch=BATCH)
 	e_data, e_loader = makeDataSet_Raw(EVAL_DATA_PATH, batch=BATCH)
 
-	model = makeModels('bencoder', HSIZE, dpr=DPR, selection=SELOP)
-	trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader, etha=MTL_ETHA, mtl = False if MTL_ETHA >= 0.99 else True,
-				nameu='roberta', optim=model.makeOptimizer(lr=LR1, lr_fin=LR2, algorithm=BERT_OPTIM))
+	model = makeModels('bencoder', HSIZE, dpr=DPR, selection=SELOP, memory_size=MS)
+	model.save(os.path.join('pts', 'roberta.pt'))
+	# trainModels(model, t_loader, epochs=EPOCHS, evalData_loader=e_loader, etha=MTL_ETHA, mtl = False if MTL_ETHA >= 0.99 else True,
+				# nameu='roberta', optim=model.makeOptimizer(lr=LR1, lr_fin=LR2, algorithm=BERT_OPTIM))
 	del t_loader
 	del e_loader
 	del t_data
@@ -190,17 +196,18 @@ def prep_Siam():
 	#C umbral=(0.00055, 0.0015), max_module=1)
 	#B umbral=(0.00087, 0.00025), max_module=1)
 	#A umbral=(0.0012, 0.0008), max_module=1)
+	#A prima umbral=(0.013, 0.008), max_module=10) #0.004
 
-	# findCenter_and_Limits(DATA_PATH, K,M, method='c-graph', method_distance='euclidea', umbral=(0.0013, 0.004), max_module=1)
-	# findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral=(0.0012, 0.0008), max_module=1) #0.004
+	# findCenter_and_Limits(DATA_PATH, K,M, method='c-graph', method_distance='euclidea', umbral=(0.0003, 0.004), max_module=1)
+	# findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral=(0.0025, 0.002), max_module=10) #0.004
 	# projectData2D(DATA_PATH, save_name='EncodC', use_centers=True) # 180 166
 
 	# return 
 
-	dts = makeSiamData(DATA_PATH, K, M, ref_folder='data', distance='euclidea')
-	des = makeSiamData(EVAL_DATA_PATH, K, M, ref_folder='data', distance='euclidea')
-	# dts = 'data/Siamtrain_en.csv'
-	# des = 'data/Siamdev_en.csv'
+	# dts = makeSiamData(DATA_PATH, K, M, ref_folder='data', distance='euclidea')
+	# des = makeSiamData(EVAL_DATA_PATH, K, M, ref_folder='data', distance='euclidea')
+	dts = 'data/Siamtrain_en.csv'
+	des = 'data/Siamdev_en.csv'
 
 
 	t_data, t_loader = makeDataSet_Siam(dts, batch=SIAM_BATCH)
@@ -227,10 +234,25 @@ def pred_with_Siam():
 	DATA_PATH, K, M = makeSiam_ZData(DATA_PATH, model, ref_folder='data', batch=PRED_BATCH)
 	EVAL_DATA_PATH, K, M = makeSiam_ZData(EVAL_DATA_PATH, model, ref_folder='data', batch=PRED_BATCH)
 	TEST_DATA_PATH, K, M = makeSiam_ZData(TEST_DATA_PATH, model, ref_folder='data', batch=PRED_BATCH)
-	
+
 	predictManual(DATA_PATH, K, M, shost_compare=True)
 	predictManual(EVAL_DATA_PATH, K, M, shost_compare=True)
 	predictManual(TEST_DATA_PATH, K, M)
+
+def zo_train():
+	global TEST_DATA_PATH
+	global EVAL_DATA_PATH
+	global DATA_PATH
+
+	DATA_PATH      = 'data/train_en.csv'
+	EVAL_DATA_PATH = 'data/dev_en.csv'
+
+	t_data, t_loader = makeDataSet_ZO(DATA_PATH, batch=SIAM_BATCH)
+	e_data, e_loader = makeDataSet_ZO(EVAL_DATA_PATH, batch=SIAM_BATCH)
+
+	model = model = makeModels('zmod', 64, in_size=64, memory_size=300)
+	trainModels(model, t_loader, epochs=10, evalData_loader=e_loader,
+				lr=0.0001, nameu='z_model', b_fun=max, smood=True, mtl=False, use_acc=True)
 
 if __name__ == '__main__':
 	check_params(arg=sys.argv[1:])
@@ -238,5 +260,9 @@ if __name__ == '__main__':
 	TrainRawEncoder()
 	# prep_Siam()
 	# pred_with_Siam()
+
+	#temp
+	# zo_train()
+	#temp
 
 	#clear_environment()

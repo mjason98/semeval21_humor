@@ -212,6 +212,40 @@ class SiamDataset(Dataset):
 		sample = {'x': sent1, 'v': 0, 'y': value}
 		return sample
 
+class ZODataset(Dataset):
+	def __init__(self, csv_file):
+		self.data_frame = pd.read_csv(csv_file)
+
+	def __len__(self):
+		return len(self.data_frame)
+
+	def transF(self, text):
+		text = [ float(i) for i in text.split() ]
+		return torch.Tensor(text).float()
+
+	def __getitem__(self, idx):
+		if torch.is_tensor(idx):
+			idx = idx.tolist()
+
+		ids  = self.data_frame.loc[idx, 'id']
+		sent  = self.transF(self.data_frame.loc[idx, 'vecs'])
+		
+		try:
+			value = self.data_frame.loc[idx, 'is_humor']
+			regv  = self.data_frame.loc[idx, 'humor_rating'] if int(value) != 0 else 0.
+		except:
+			value, regv = 0, 0.
+
+		sample = {'x': sent, 'y': value, 'v':regv, 'id':ids}
+		return sample
+
+def makeDataSet_ZO(csv_path:str, batch, shuffle=True):
+	data   =  ZODataset(csv_path)
+	loader =  DataLoader(data, batch_size=batch,
+							shuffle=shuffle, num_workers=4,
+							drop_last=False)
+	return data, loader
+
 def makeDataSet_Raw(csv_path:str, batch, shuffle=True):
 	data   =  RawDataset(csv_path)
 	loader =  DataLoader(data, batch_size=batch,
@@ -262,6 +296,71 @@ def makePredictData(csv_path:str, batch):
 	return data, loader
 
 # ================================ MODELS ========================================
+# Added Memory Augmented Network
+class MAN(nn.Module):
+	"""docstring for MAN"""
+	def __init__(self, in_size, hidd_size, memory_size=50, alpha_sig=-0.4, gamma=0.3):
+		super(MAN, self).__init__()
+		self.memory_size = memory_size
+		self.memory_vector_size = hidd_size
+
+		# self.controler = nn.LSTMCell(in_size, hidd_size)
+		self.controler = nn.Sequential(nn.Linear(in_size, hidd_size), nn.LeakyReLU())
+
+		self.M = np.zeros((self.memory_size, self.memory_vector_size), dtype=np.float32)
+		self.gate = 1. / (1. + math.exp(-alpha_sig))
+		self.gamma = gamma
+
+		self.w_u      = None
+		self.prev_w_r = None
+	
+	def init_Batch(self, batch):
+		self.w_u      = np.zeros((batch, self.memory_size))
+		self.prev_w_r = np.zeros((batch, self.memory_size))
+
+	def read_head(self, K, prev_M_t):
+		inner_dot = K @ prev_M_t.T
+		k_sq = K.pow(2).sum(dim=-1, keepdim=True).sqrt()
+		m_sq = prev_M_t.pow(2).sum(dim=-1, keepdim=True).sqrt()
+		norm_dot = k_sq @ m_sq.T
+		coss_sim = inner_dot / (norm_dot + 1e-8)
+		coss_sim = F.softmax(coss_sim, dim=-1)
+		return coss_sim
+
+	def write(self, k, w_r, w_u, prev_r, prev_M_t):
+		with torch.no_grad():
+			prev_w_u = torch.from_numpy(w_u).detach()
+			prev_w_r = torch.from_numpy(prev_r).detach()
+			key      = k.detach()
+			w_lu = torch.argmin(prev_w_u, dim=-1).long()
+			w_lu = (1. - self.gate) * F.one_hot(w_lu, num_classes=self.memory_size).float()
+			w_w  = self.gate*prev_w_r + w_lu
+
+			# usar prev_M_T para normalizar si da error
+			k_w  = torch.einsum('bi,bj->bij', w_w, key).sum(dim=0)
+			k_w  = F.normalize(prev_M_t + k_w, dim=-1).numpy()
+			self.M[:,:] = k_w[:,:]
+
+			prev_r[:,:] = w_r.detach().numpy()[:,:]
+			new_u    = F.normalize(self.gamma*prev_w_u + w_r + w_w, dim=-1).numpy()
+			w_u[:,:]   = new_u[:,:]
+
+	def forward(self, X):
+		if self.w_u is None or self.w_u.shape[0] != X.shape[0]:
+			self.init_Batch(X.shape[0])
+
+		M = torch.from_numpy(self.M).detach()
+		# Read from the memory
+		h = self.controler(X)
+		w_r = self.read_head(h, M)
+		read_i = w_r @ M
+		out = torch.cat([h, read_i], dim=-1).reshape(X.shape[0], self.memory_vector_size*2)
+
+		# Write to the memory
+		self.write(h, w_r, self.w_u, self.prev_w_r, M)
+
+		return out
+
 class MXP(torch.nn.Module):
 	def __init__(self):
 		super(MXP, self).__init__()
@@ -294,13 +393,16 @@ class ATT(torch.nn.Module):
 		return (alpha * X).sum(dim=1)
 
 class Encod_Model(nn.Module):
-	def __init__(self, hidden_size, vec_size, dropout=0.1):
+	def __init__(self, hidden_size, vec_size, dropout=0.1, use_man=False, mm=250):
 		super(Encod_Model, self).__init__()
 		self.mid_size = 64
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), nn.Dropout(dropout), 
 									  nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
 									  nn.Linear(hidden_size//2, self.mid_size), nn.LeakyReLU())
-		self.Task1   = nn.Linear(self.mid_size, 2)
+		if use_man:
+			self.Task1 = nn.Sequential(MAN(self.mid_size, self.mid_size//2, memory_size=mm), nn.Linear(2*(self.mid_size//2), 2))
+		else:
+			self.Task1   = nn.Linear(self.mid_size, 2)
 		self.Task2   = nn.Linear(self.mid_size, 1)
 
 	def forward(self, X, ret_vec=False):
@@ -316,6 +418,13 @@ class Encod_Model(nn.Module):
 
 	def save(self, path):
 		torch.save(self.state_dict(), path) 
+	
+	def load_memory(self, path):
+		pp = os.path.join(os.path.dirname(path), 'memory_'+os.path.basename(path)+'.npy')
+		self.Task1[0].M = np.load(pp)
+	def save_memory(self, path):
+		pp = os.path.join(os.path.dirname(path), 'memory_'+os.path.basename(path)+'.npy')
+		np.save(pp, self.Task1[0].M)
 
 class ContrastiveLoss(torch.nn.Module):
 	"""
@@ -333,15 +442,15 @@ class ContrastiveLoss(torch.nn.Module):
 		return loss_contrastive
 
 class Siam_Model(nn.Module):
-	def __init__(self, hidden_size, vec_size, dropout=0.2):
+	def __init__(self, hidden_size, vec_size, dropout=0.01):
 		super(Siam_Model, self).__init__()
 		# self.criterion = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
 		self.criterion1 = ContrastiveLoss(1.0)
 
-		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), #nn.Dropout(dropout), 
+		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), nn.Dropout(dropout), 
 									  nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
 									  nn.Linear(hidden_size//2, hidden_size//4))
-		# self.Task1   = nn.Linear(hidden_size//4, 2)
+
 		self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 		self.to(device=self.device)
 
@@ -363,16 +472,30 @@ class Siam_Model(nn.Module):
 		torch.save(self.state_dict(), path)
 
 class Z_Model(nn.Module):
-	def __init__(self, vec_size, dropout=0.2):
+	def __init__(self, hsize, vec_size, dropout=0.2, memory_size=250):
 		super(Z_Model, self).__init__()
 		self.criterion1 = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
 
-		self.Task1   = nn.Linear(vec_size, 2)
-		self.Task2   = nn.Linear(vec_size, 1)
-	def forward(self, X):
-		y1 = self.Task1(X)
-		y2 = self.Task2(X)
+		self.hsize = hsize
+		self.L1 = MAN(vec_size, hsize, memory_size=memory_size)
 
+		self.siam_blk = nn.Sequential(nn.Linear(hsize, hsize//2), nn.LeakyReLU(), nn.Linear(hsize//2, hsize//4))
+		# self.Task1 = nn.Sequential(nn.Linear(hsize*2, hsize), nn.LeakyReLU(), nn.Linear(hsize, 2))
+		self.Task1 = nn.Linear(hsize//4, 2)
+		self.Task2 = nn.Linear(hsize//4, 1)
+
+		self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+		self.to(device=self.device)
+
+	def forward(self, X):
+		y_t = self.L1(X)
+
+		# y1 = self.siam_blk(y_t[:, :self.hsize])
+		# y2 = self.siam_blk(y_t[:, self.hsize:])
+		# y_t = y1 - y2
+
+		y1 = self.Task1(y_t)
+		y2 = self.Task2(y_t)
 		return y1, y2
 
 	def load(self, path):
@@ -392,18 +515,19 @@ class MaskedMSELoss(torch.nn.Module):
 		return (y_loss*y_mask).mean()
 
 class Bencoder_Model(nn.Module):
-	def __init__(self, hidden_size, vec_size=768, dropout=0.1, max_length=120, selection='addn'):
+	def __init__(self, hidden_size, vec_size=768, dropout=0.1, max_length=120, selection='addn', use_man=False, mm=250):
 		'''
 			selection: ['addn', 'first', 'mxp', 'att']
 		'''
 		super(Bencoder_Model, self).__init__()
 		self.criterion1 = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
 		self.criterion2 = MaskedMSELoss()
+		self.use_man = use_man
 		# self.criterion2 = nn.CrossEntropyLoss(reduction='none')#weight=torch.Tensor([0.7,0.3]))
 
 		self.max_length = max_length
 		self.tok, self.bert = make_bert_pretrained_model()
-		self.encoder = Encod_Model(hidden_size, vec_size, dropout=dropout)
+		self.encoder = Encod_Model(hidden_size, vec_size, dropout=dropout, use_man=use_man, mm=mm)
 		self.selection = None
 
 		if selection   == 'addn':
@@ -426,9 +550,13 @@ class Bencoder_Model(nn.Module):
 
 	def load(self, path):
 		self.load_state_dict(torch.load(path, map_location=self.device))
+		if self.use_man:
+			self.encoder.load_memory(path)
 
 	def save(self, path):
 		torch.save(self.state_dict(), path) 
+		if self.use_man:
+			self.encoder.save_memory(path)
 	
 	def makeOptimizer(self, lr=5e-5, decay=2e-5, algorithm='adam', lr_fin=3e-5):
 		pars = [{'params':self.encoder.parameters()}]
@@ -452,15 +580,15 @@ class Bencoder_Model(nn.Module):
 			return torch.optim.RMSprop(pars, lr=lr_fin, weight_decay=decay)
 	
 
-def makeModels(name:str, size, in_size=768, dpr=0.1, selection='addn'):
+def makeModels(name:str, size, in_size=768, dpr=0.1, selection='addn', memory_size=None):
 	if name == 'encoder':
 		return Encod_Model(size, in_size, dropout=dpr)
 	elif name == 'bencoder':
-		return Bencoder_Model(size, in_size, dropout=dpr, selection=selection)
+		return Bencoder_Model(size, in_size, dropout=dpr, selection=selection, use_man= True if memory_size is not None else False, mm=memory_size)
 	elif name == 'siam':
 		return Siam_Model(size, in_size, dropout=dpr)
 	elif name == 'zmod':
-		return Z_Model(in_size, device=device)
+		return Z_Model(size, in_size, memory_size=memory_size if memory_size is not None else 250)
 	else:
 		print ('ERROR::NAME', name, 'not founded!!')
 

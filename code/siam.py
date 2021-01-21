@@ -5,9 +5,10 @@ import torch
 import pandas as pd 
 import numpy as np 
 from sklearn.cluster import KMeans
+from sklearn.metrics import precision_recall_fscore_support as score
 import networkx as nx
 
-from .utils import MyBar, colorizar
+from .utils import MyBar, colorizar, headerizar
 
 # Path to infomap gitHub code--------------------------------------
 # Before run this code, the infomap code most be compiled
@@ -447,13 +448,9 @@ def makeSiamData(data_path:str, K, M, ref_folder='data', humor_label='is_humor',
         if int(data.loc[i, humor_label]) == 0:
             dt = list(_pikMeRandom(neg_centers, K))
             da = _pikMeCloser(pos_centers, data.loc[i, 'vecs'], M, distance=distance)
-            # dt = _findMyRandom(neg, K)
-            # da = _findMyCloser(pos, data.loc[i, 'vecs'], M, distance=distance)
         else:
             dt = list(_pikMeRandom(pos_centers, K))
             da = _pikMeCloser(neg_centers, data.loc[i, 'vecs'], M, distance=distance)
-            # dt = _findMyRandom(pos, K)
-            # da = _findMyCloser(neg, data.loc[i, 'vecs'], M, distance=distance)
 
         for v in dt:
             new_data.append(v)
@@ -618,11 +615,22 @@ def convert2EncoderVec(data_name:str, model, loader, save_pickle=False, save_as_
         data.to_csv(new_name, index=None, header=n_head)
     return new_name
 
+def _eval(y_test, y_predicted):
+	# precision, recall, fscore, _ = score(y_test, y_predicted)
+	# print('\n     {0}   {1}'.format("0","1"))
+	# print('P: {}'.format(precision))
+	# print('R: {}'.format(recall))
+	# print('F: {}'.format(fscore))
+
+	mprecision, mrecall, mfscore, _ = score(y_test, y_predicted, average='macro')
+	print(headerizar('# MACRO-AVG'))
+	print('P: {} R: {} F: {}'.format(mprecision, mrecall, mfscore))
+
 def predictManual(data_path:str, N_pos, N_neg, save_name='prediction_manual', shost_compare=False):
     save_name = os.path.join('preds', save_name+'.csv')
     data = pd.read_csv(data_path)
 
-    O, S = [], 0
+    O, RV = [],[]
     print ('# Manual predictions to', colorizar(os.path.basename(data_path)))
     for i in range(len(data)):
         vec = np.array([float(s) for s in data.loc[i, 'vecs'].split()], dtype=np.float32)
@@ -631,14 +639,12 @@ def predictManual(data_path:str, N_pos, N_neg, save_name='prediction_manual', sh
         val = '1' if v1 < v2 else '0'
         
         if shost_compare:
-            real_val = int(data.loc[i, 'is_humor'])
-            S += 1 if real_val == int(val) else 0
-        else:
-            O.append(val)
+            RV.append(data.loc[i, 'is_humor'])
+        O.append(val)
     
     if shost_compare:
-        S /= len(data)
-        print ('# Acc', S)
+        RV, O = [int(s) for s in RV], [int(s) for s in O]
+        _eval(RV, O)
     else:
         data.drop(['vecs'], axis=1, inplace=True)
         header = list(data.columns) + ['is_humor']
