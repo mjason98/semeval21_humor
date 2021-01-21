@@ -313,6 +313,9 @@ class MAN(nn.Module):
 
 		self.w_u      = None
 		self.prev_w_r = None
+
+		self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+		self.to(device=self.device)
 	
 	def init_Batch(self, batch):
 		self.w_u      = np.zeros((batch, self.memory_size))
@@ -329,8 +332,8 @@ class MAN(nn.Module):
 
 	def write(self, k, w_r, w_u, prev_r, prev_M_t):
 		with torch.no_grad():
-			prev_w_u = torch.from_numpy(w_u).detach()
-			prev_w_r = torch.from_numpy(prev_r).detach()
+			prev_w_u = torch.from_numpy(w_u).detach().to(device=self.device)
+			prev_w_r = torch.from_numpy(prev_r).detach().to(device=self.device)
 			key      = k.detach()
 			w_lu = torch.argmin(prev_w_u, dim=-1).long()
 			w_lu = (1. - self.gate) * F.one_hot(w_lu, num_classes=self.memory_size).float()
@@ -349,7 +352,7 @@ class MAN(nn.Module):
 		if self.w_u is None or self.w_u.shape[0] != X.shape[0]:
 			self.init_Batch(X.shape[0])
 
-		M = torch.from_numpy(self.M).detach()
+		M = torch.from_numpy(self.M).detach().to(device=self.device)
 		# Read from the memory
 		h = self.controler(X)
 		w_r = self.read_head(h, M)
