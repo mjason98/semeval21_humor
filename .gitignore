@@ -6,3 +6,9 @@ __pycache__
 1A_Task/test.py
 1A_Task/pics
 1A_Task/preds
+
+Other_Tasks/data
+Other_Tasks/Features_Generator/*.csv
+Other_Tasks/Features_Generator/*.tsv
+Other_Tasks/models/.ipynb_checkpoints
+Other_Tasks/Optimizers
