@@ -40,7 +40,7 @@ SIAM_BATCH   = 64
 SIAM_SIZE    = 32
 SIAM_DROPOUT = 0.25
 SIAM_LR      = 2e-5 #2e-4
-SIAM_EPOCH   = 20
+SIAM_EPOCH   = 30
 K,M          = 2, 5 #2,3
 
 def check_params(arg=None):
@@ -256,9 +256,9 @@ def zo_train():
 if __name__ == '__main__':
 	check_params(arg=sys.argv[1:])
 
-	TrainRawEncoder()
-	# prep_Siam()
-	# pred_with_Siam()
+	# TrainRawEncoder()
+	prep_Siam()
+	pred_with_Siam()
 
 	#temp
 	# zo_train()

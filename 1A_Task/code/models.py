@@ -445,10 +445,12 @@ class ContrastiveLoss(torch.nn.Module):
 		return loss_contrastive
 
 class Siam_Model(nn.Module):
-	def __init__(self, hidden_size, vec_size, dropout=0.01):
+	def __init__(self, hidden_size, vec_size, dropout=0.01, add_noise=(False, False), variance_noice=0.1):
 		super(Siam_Model, self).__init__()
 		# self.criterion = nn.CrossEntropyLoss()#weight=torch.Tensor([0.7,0.3]))
 		self.criterion1 = ContrastiveLoss(1.0)
+		self.addN = add_noise
+		self.variance = variance_noice ** 0.5
 
 		self.Dense1   = nn.Sequential(nn.Linear(vec_size, hidden_size), nn.LeakyReLU(), nn.Dropout(dropout), 
 									  nn.Linear(hidden_size, hidden_size//2), nn.LeakyReLU(), 
@@ -460,6 +462,12 @@ class Siam_Model(nn.Module):
 	def forward(self, X):
 		size = X.shape[1] //2
 		X1, X2 = X[:,:size].to(device=self.device), X[:,size:].to(device=self.device)
+		
+		# Gaussian Noice
+		if self.addN[0]:
+			X1 += torch.randn(X1.shape) * self.variance
+		if self.addN[1]:
+			X2 += torch.randn(X2.shape) * self.variance
 
 		y1 = self.Dense1(X1)
 		y2 = self.Dense1(X2)
@@ -589,7 +597,7 @@ def makeModels(name:str, size, in_size=768, dpr=0.1, selection='addn', memory_si
 	elif name == 'bencoder':
 		return Bencoder_Model(size, in_size, dropout=dpr, selection=selection, use_man= True if memory_size is not None else False, mm=memory_size)
 	elif name == 'siam':
-		return Siam_Model(size, in_size, dropout=dpr)
+		return Siam_Model(size, in_size, dropout=dpr, add_noise=(True, True), variance_noice=5)
 	elif name == 'zmod':
 		return Z_Model(size, in_size, memory_size=memory_size if memory_size is not None else 250)
 	else:

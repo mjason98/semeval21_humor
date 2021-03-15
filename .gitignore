@@ -1,7 +1,8 @@
 __pycache__
-code/__pycache__
-data
-pts/*
-test.py
-pics
-preds
+1A_Task/__pycache__
+1A_Task/code/__pycache__
+1A_Task/data
+1A_Task/pts/*
+1A_Task/test.py
+1A_Task/pics
+1A_Task/preds
