@@ -189,8 +189,8 @@ def TrainRawEncoder():
 	del data 
 
 def prep_Siam():
-	DATA_PATH      = 'data/train_en.csv'
-	EVAL_DATA_PATH = 'data/dev_en.csv'
+	# DATA_PATH      = 'data/train_en.csv'
+	# EVAL_DATA_PATH = 'data/dev_en.csv'
 
 	#C umbral=(0.00055, 0.0015), max_module=1)
 	#B umbral=(0.00087, 0.00025), max_module=1)
@@ -198,15 +198,15 @@ def prep_Siam():
 	#A prima umbral=(0.013, 0.008), max_module=10) #0.004
 
 	# findCenter_and_Limits(DATA_PATH, K,M, method='c-graph', method_distance='euclidea', umbral=(0.0003, 0.004), max_module=1)
-	# findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral=(0.0025, 0.002), max_module=10) #0.004
-	# projectData2D(DATA_PATH, save_name='EncodC', use_centers=True) # 180 166
+	findCenter_and_Limits(DATA_PATH, K,M, method='i-graph', method_distance='euclidea', umbral=(0.0025, 0.002), max_module=10) #0.004
+	projectData2D(DATA_PATH, save_name='EncodC', use_centers=True) # 180 166
 
 	# return 
 
-	# dts = makeSiamData(DATA_PATH, K, M, ref_folder='data', distance='euclidea')
-	# des = makeSiamData(EVAL_DATA_PATH, K, M, ref_folder='data', distance='euclidea')
-	dts = 'data/Siamtrain_en.csv'
-	des = 'data/Siamdev_en.csv'
+	dts = makeSiamData(DATA_PATH, K, M, ref_folder='data', distance='euclidea')
+	des = makeSiamData(EVAL_DATA_PATH, K, M, ref_folder='data', distance='euclidea')
+	# dts = 'data/Siamtrain_en.csv'
+	# des = 'data/Siamdev_en.csv'
 
 
 	t_data, t_loader = makeDataSet_Siam(dts, batch=SIAM_BATCH)
@@ -223,9 +223,9 @@ def pred_with_Siam():
 	global K
 	global M 
 
-	TEST_DATA_PATH = 'data/test_en.csv'
-	EVAL_DATA_PATH = 'data/dev_en.csv'
-	DATA_PATH = 'data/train_en.csv'
+	# TEST_DATA_PATH = 'data/test_en.csv'
+	# EVAL_DATA_PATH = 'data/dev_en.csv'
+	# DATA_PATH = 'data/train_en.csv'
 
 	model = makeModels('siam', SIAM_SIZE, dpr=SIAM_DROPOUT, in_size=64)
 	model.load(os.path.join('pts', 'siames.pt'))
@@ -238,30 +238,9 @@ def pred_with_Siam():
 	predictManual(EVAL_DATA_PATH, K, M, shost_compare=True)
 	predictManual(TEST_DATA_PATH, K, M)
 
-def zo_train():
-	global TEST_DATA_PATH
-	global EVAL_DATA_PATH
-	global DATA_PATH
-
-	DATA_PATH      = 'data/train_en.csv'
-	EVAL_DATA_PATH = 'data/dev_en.csv'
-
-	t_data, t_loader = makeDataSet_ZO(DATA_PATH, batch=SIAM_BATCH)
-	e_data, e_loader = makeDataSet_ZO(EVAL_DATA_PATH, batch=SIAM_BATCH)
-
-	model = model = makeModels('zmod', 64, in_size=64, memory_size=300)
-	trainModels(model, t_loader, epochs=10, evalData_loader=e_loader,
-				lr=0.0001, nameu='z_model', b_fun=max, smood=True, mtl=False, use_acc=True)
-
 if __name__ == '__main__':
 	check_params(arg=sys.argv[1:])
 
-	# TrainRawEncoder()
+	TrainRawEncoder()
 	prep_Siam()
 	pred_with_Siam()
-
-	#temp
-	# zo_train()
-	#temp
-
-	#clear_environment()
