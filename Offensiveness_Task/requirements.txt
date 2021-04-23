@@ -1,0 +1,9 @@
+matplotlib
+progress
+transformers
+tensorflow
+keras
+pandas
+sklearn
+numpy
+keras_self_attention
