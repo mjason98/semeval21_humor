@@ -1,6 +1,4 @@
 import pandas as pd, numpy as np, os, sys
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-sys.path.append('/content/drive/MyDrive/Semeval/Share/models')
 import keras as K, tensorflow as tf
 from transformers import AutoTokenizer, TFAutoModelForMaskedLM
 from matplotlib import pyplot as plt
@@ -60,46 +58,50 @@ def splits_batch(batch_size, m):
     splits.append(perm[m*batch_size:])
   return splits
 
-tokenizer = AutoTokenizer.from_pretrained("vinai/bertweet-base") 
-model =  TFAutoModelForMaskedLM.from_pretrained("vinai/bertweet-base", return_dict=True)
 
-text = pd.read_csv('../data/data_for_mlm.csv').to_numpy()[:, 1]
-text, labels = preprocessing(text, 70, tokenizer)
+def train_language_model(model_name, data):
 
-loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
-optimizer = tf.keras.optimizers.Adam(1e-5)
-# coef_learning = set_lt_multipliers(0.9, model)    
-# optimizer = NadamW(learning_rate=1e-5, decay=2e-5, lr_multipliers=coef_learning, init_verbose=False)
+  if model_name=='bt':
+    pt_path = "vinai/bertweet-base"
+  elif model_name=='rob':
+    pt_path = "roberta-base"
 
+  tokenizer = AutoTokenizer.from_pretrained(pt_path) 
+  model =  TFAutoModelForMaskedLM.from_pretrained(pt_path, return_dict=True)
 
-batch_size = 32
-history = []
-for i in range(4):
+  text = pd.read_csv(data).to_numpy()[:, 1]
+  text, labels = preprocessing(text, 70, tokenizer)
 
-  batch_splits = splits_batch(batch_size, len(text))
-  loss = 0
-  perc = 0
+  loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+  optimizer = tf.keras.optimizers.Adam(1e-5)
 
-  # with Bar('Processing', max=20) as bar:
-  for j in range(len(batch_splits)):
-    with tf.GradientTape() as g:
+  batch_size = 32
+  history = []
+  for i in range(4):
 
-        if j*100.0/len(batch_splits) - perc  >= 1:
-          perc = j*100.0/len(batch_splits)
-          print('\r Epoch:{} setp {} of {}. {}%'.format(i+1, j, len(batch_splits), np.round(perc, decimals=2)), end="")
+    batch_splits = splits_batch(batch_size, len(text))
+    loss = 0
+    perc = 0
 
-        out = model(text[batch_splits[j],:])
-        loss_value = loss_object(y_true=labels[batch_splits[j],:], y_pred=out.logits)
-    gradients = g.gradient(loss_value, model.trainable_variables)
-    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-    loss += loss_value.numpy()/len(batch_splits)
-  history.append(loss)
-  print('\repoch: {} Loss: {}'.format( i+1, loss))
+    for j in range(len(batch_splits)):
+      with tf.GradientTape() as g:
 
-plt.plot(history)
-plt.legend('train', loc='upper left')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.show()
-os.system('mkdir ../data/lm_fine_tunning')
-model.save_pretrained('../data/lm_fine_tunning')
+          if j*100.0/len(batch_splits) - perc  >= 1:
+            perc = j*100.0/len(batch_splits)
+            print('\r Epoch:{} setp {} of {}. {}%'.format(i+1, j, len(batch_splits), np.round(perc, decimals=2)), end="")
+
+          out = model(text[batch_splits[j],:])
+          loss_value = loss_object(y_true=labels[batch_splits[j],:], y_pred=out.logits)
+      gradients = g.gradient(loss_value, model.trainable_variables)
+      optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+      loss += loss_value.numpy()/len(batch_splits)
+    history.append(loss)
+    print('\repoch: {} Loss: {}'.format( i+1, loss))
+
+  plt.plot(history)
+  plt.legend('train', loc='upper left')
+  plt.ylabel('loss')
+  plt.xlabel('epoch')
+  plt.show()
+  os.system('mkdir -p ../data/lm_fine_tunning')
+  model.save_pretrained('../data/lm_fine_tunning')
