@@ -224,6 +224,12 @@ def trucncated_under_sampling(offensiveness, treshold):
     allindex += list(index_used[i])
   return np.array(allindex)
 
+def Minkowski_masked_loss(y_true, y_pred):
+  mask = K.backend.cast(K.backend.not_equal(y_true, -1), K.backend.floatx())
+  return K.backend.mean(K.backend.pow(K.backend.abs(y_pred*mask-y_true*mask), 1.4))
+
+def Minkowski_loss(y_true, y_pred):
+    return K.backend.mean(K.backend.pow(K.backend.abs(y_pred-y_true), 1.2))
 
 def root_mean_squared_error(y_true, y_pred):
     return K.backend.sqrt(K.losses.mean_squared_error(y_true, y_pred))

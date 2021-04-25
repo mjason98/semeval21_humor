@@ -103,5 +103,5 @@ def train_language_model(model_name, data):
   plt.ylabel('loss')
   plt.xlabel('epoch')
   plt.show()
-  os.system('mkdir -p ../data/lm_fine_tunning')
-  model.save_pretrained('../data/lm_fine_tunning')
+  os.system(f'mkdir -p ../data/lm_fine_tunning_{model_name}')
+  model.save_pretrained(f'../data/lm_fine_tunning_{model_name}')

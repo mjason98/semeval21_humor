@@ -1,11 +1,9 @@
 #%%
 import glob
 import numpy as np
-import re
 import pandas as pd
 
 path = '../../data/affective_resources/'
-        # home/nitro/projects/Semeval/data/features/Figurative-Datasets/datosIronyDetection/recursos
 dic = set()
 addrs = np.array(glob.glob(path + '*.txt') + glob.glob(path + 'binary/*.txt') )
 phl = '../../data/affective_resources/hurtlex_EN_conservative.tsv'
