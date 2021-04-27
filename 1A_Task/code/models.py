@@ -392,7 +392,7 @@ class ATT(torch.nn.Module):
 		super(ATT, self).__init__()
 		self.A = nn.Linear(in_size, 1)
 	def forward(self, X):		
-		alpha = F.softmax(self.A(X), dim=-1)
+		alpha = F.softmax(self.A(X), dim=1)
 		return (alpha * X).sum(dim=1)
 
 class Encod_Model(nn.Module):
